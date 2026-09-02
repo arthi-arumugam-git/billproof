@@ -1,0 +1,23 @@
+# billproof
+
+> A command-line tool that prices every Claude Code, Codex and Gemini CLI request the way the provider bills it, shows which turns cost the money and why, and reconciles an organisation's Anthropic invoice against its own records. Runs locally: `npx billproof`. Nothing leaves the machine except a licence check.
+
+- Site: https://arthi-arumugam-git.github.io/billproof/
+- Source: https://github.com/arthi-arumugam-git/billproof
+- npm: https://www.npmjs.com/package/billproof
+- Author: Arthi Arumugam, https://wrong-numbers.dev/
+
+## What it answers
+- What did my Claude Code sessions actually cost at Anthropic list price, including the 5-minute and 1-hour cache-write tiers and cache reads?
+- Which turns cost the money, and why (cache expired, 1-hour writes, model switch, prefix changed, fast mode, server-side fallback)?
+- Does the Anthropic organisation cost report match what our own metering recorded, day by day and model by model?
+
+## Pricing
+- scan: free
+- receipt: $49 once per person
+- reconcile (Team): $199 once per organisation
+
+## Facts a reader can check
+- A 5-minute cache write costs 1.25x base input; a 1-hour write costs 2x; a cache read costs 0.1x (0.025x on Claude Fable 5.1).
+- Claude Code writes one transcript line per content block, so naive counters over-count; billproof dedupes by message id.
+- Prices are cited to platform.claude.com/docs/en/about-claude/pricing with the fetch date.
