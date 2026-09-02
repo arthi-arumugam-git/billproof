@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>billproof · prove your AI bill</title>
+<meta name="description" content="npx billproof prices every Claude Code request the way Anthropic bills it and shows which turns cost the money and why. Nothing leaves your machine.">
+<meta property="og:title" content="billproof · prove your AI bill">
+<meta property="og:description" content="Reads the Claude Code transcripts already on your disk, prices every request the way Anthropic bills it, and tells you which turns cost the money and why.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://billproof.vercel.app/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231c1b18'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='18' fill='%23f3eee2' text-anchor='middle'%3E$%3C/text%3E%3C/svg%3E">
+<script>
+(function(){try{var t=localStorage.getItem("bp-theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,300&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f1ea;--paper:#fbf9f4;--ink:#1c1b18;--ink-2:#4a4740;--dim:#7d7970;--line:#dcd7cb;--accent:#8a2f1d;--good:#2f6b3a;--warn:#8a6a1d;--tag:#ece7db;
+  --serif:"Fraunces",Georgia,"Times New Roman",serif;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --fs-display:clamp(2.6rem,7vw,5.2rem);--fs-h1:clamp(1.9rem,4vw,2.9rem);--fs-h2:clamp(1.35rem,2.4vw,1.75rem);--fs-body:clamp(1.02rem,1.1vw,1.12rem);
+  color-scheme:light;
+}
+:root[data-theme="dark"]{--bg:#141310;--paper:#1c1a16;--ink:#ece7db;--ink-2:#c9c3b5;--dim:#8f8a7e;--line:#2d2a24;--accent:#e0704f;--good:#7fc48d;--warn:#d9b45a;--tag:#26241f;color-scheme:dark}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141310;--paper:#1c1a16;--ink:#ece7db;--ink-2:#c9c3b5;--dim:#8f8a7e;--line:#2d2a24;--accent:#e0704f;--good:#7fc48d;--warn:#d9b45a;--tag:#26241f;color-scheme:dark}}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0;color:var(--ink);font-family:var(--serif);font-size:var(--fs-body);line-height:1.55;letter-spacing:-0.005em;font-feature-settings:"kern","liga","ss01";-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration-color:var(--line);text-underline-offset:3px}a:hover{text-decoration-color:var(--accent)}
+.page{max-width:920px;margin:0 auto;padding:clamp(20px,4vw,48px) clamp(18px,4vw,40px) 96px}
+header.top{display:flex;justify-content:space-between;align-items:baseline;gap:16px;font-family:var(--mono);font-size:.85rem;color:var(--dim);margin-bottom:clamp(40px,8vw,88px)}
+header.top b{color:var(--ink);font-weight:500}
+header.top nav a{margin-left:18px;text-decoration:none}
+button.theme{background:none;border:1px solid var(--line);color:var(--dim);font:inherit;padding:2px 10px;border-radius:999px;cursor:pointer;margin-left:18px}
+.hero h1{font-size:var(--fs-display);font-weight:300;line-height:1.02;letter-spacing:-0.02em;margin:0 0 20px;max-width:14ch}
+.hero h1 em{font-style:italic;font-weight:300;color:var(--accent)}
+.hero p.lede{font-size:clamp(1.1rem,1.6vw,1.3rem);color:var(--ink-2);max-width:52ch;margin:0 0 28px;font-weight:300}
+.install{display:inline-flex;align-items:center;gap:14px;font-family:var(--mono);font-size:1rem;background:var(--paper);border:1px solid var(--line);padding:12px 18px;border-radius:6px;margin:0 0 56px}
+.install span.p{color:var(--dim)}
+.ledger{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:clamp(18px,3vw,30px);font-family:var(--mono);font-size:clamp(.78rem,1.3vw,.92rem);line-height:1.5;overflow-x:auto;margin:0 0 14px;position:relative}
+.ledger .k{color:var(--dim)}
+.ledger .big{font-family:var(--serif);font-size:clamp(2.2rem,6vw,4rem);font-weight:500;letter-spacing:-0.02em;line-height:1;margin:6px 0 18px;display:block}
+.ledger .big small{font-size:.35em;font-family:var(--mono);font-weight:400;color:var(--dim);letter-spacing:0;margin-left:10px;vertical-align:middle}
+.ledger table{border-collapse:collapse;width:100%;white-space:nowrap}
+.ledger td,.ledger th{padding:3px 14px 3px 0;text-align:left;font-weight:400}
+.ledger td.n,.ledger th.n{text-align:right}
+.ledger th{color:var(--dim);border-bottom:1px solid var(--line)}
+.ledger .bad{color:var(--accent)}.ledger .ok{color:var(--good)}.ledger .meh{color:var(--warn)}
+.ledger .sep{height:14px}
+.cap{font-family:var(--mono);font-size:.78rem;color:var(--dim);margin:0 0 clamp(56px,9vw,104px)}
+h2{font-size:var(--fs-h2);font-weight:500;letter-spacing:-0.015em;margin:0 0 18px;line-height:1.2}
+section{margin-bottom:clamp(56px,9vw,104px)}
+.prose p{max-width:62ch;color:var(--ink-2);margin:0 0 16px}
+.defects{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:22px}
+.defect{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:18px 18px 16px}
+.defect .num{font-family:var(--mono);font-size:1.6rem;font-weight:500;color:var(--accent);margin:0 0 6px;letter-spacing:-0.02em}
+.defect .num.under{color:var(--warn)}
+.defect h3{font-size:1rem;font-weight:500;margin:0 0 6px}
+.defect p{margin:0;color:var(--ink-2);font-size:.95rem}
+.causes{width:100%;border-collapse:collapse;font-size:.95rem;margin-top:8px}
+.causes th{text-align:left;font-family:var(--mono);font-weight:400;color:var(--dim);font-size:.8rem;padding:6px 12px 8px 0;border-bottom:1px solid var(--line)}
+.causes td{padding:9px 12px 9px 0;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
+.causes td:first-child{font-family:var(--mono);font-size:.85rem;color:var(--ink);white-space:nowrap}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.plan{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:22px 22px 20px;display:flex;flex-direction:column}
+.plan.paid{border-color:var(--ink)}
+.plan .name{font-family:var(--mono);font-size:.8rem;color:var(--dim);margin:0 0 8px}
+.plan .price{font-size:2.1rem;font-weight:500;letter-spacing:-0.02em;margin:0 0 14px;line-height:1}
+.plan .price small{font-size:.45em;color:var(--dim);font-weight:400;margin-left:6px}
+.plan ul{margin:0 0 22px;padding-left:18px;color:var(--ink-2);font-size:.95rem}
+.plan ul li{margin-bottom:6px}
+.btn{display:inline-block;font-family:var(--mono);font-size:.95rem;text-decoration:none;border:1px solid var(--ink);padding:11px 18px;border-radius:6px;color:var(--ink);margin-top:auto;text-align:center}
+.btn.primary{background:var(--ink);color:var(--bg)}
+.note{font-family:var(--mono);font-size:.78rem;color:var(--dim);margin-top:10px}
+.faq dt{font-weight:500;margin:0 0 6px}
+.faq dd{margin:0 0 22px;color:var(--ink-2);max-width:62ch}
+.author{border-top:1px solid var(--line);padding-top:28px;color:var(--ink-2);max-width:62ch}
+.author b{color:var(--ink);font-weight:500}
+footer{font-family:var(--mono);font-size:.78rem;color:var(--dim);margin-top:64px;display:flex;flex-wrap:wrap;gap:8px 24px}
+@media (max-width:600px){header.top nav a{margin-left:12px}.install{white-space:nowrap;overflow-x:auto;max-width:100%}}
+</style>
+</head>
+<body>
+<div class="page">
+<header class="top">
+  <div><b>billproof</b> · v0.1</div>
+  <nav><a href="#receipt">receipt</a><a href="#price">price</a><a href="#faq">faq</a><a href="https://github.com/arthi-arumugam-git/billproof">source</a><button class="theme" id="theme" aria-label="toggle theme">theme</button></nav>
+</header>
+
+<section class="hero">
+  <h1>Prove your <em>AI bill.</em></h1>
+  <p class="lede">billproof reads the Claude Code transcripts already on your disk, prices every request the way Anthropic bills it, and tells you which turns cost the money and why. Nothing leaves your machine.</p>
+  <div class="install"><span class="p">$</span> npx billproof</div>
+
+  <div class="ledger" aria-label="real scan output">
+    <span class="k">True cost at Anthropic list price, one machine, 2026-07-29 to 2026-09-02</span>
+    <span class="big">$12,573.49<small>48,522 requests · 41 sessions</small></span>
+    <table>
+      <tr><th>category</th><th class="n">tokens</th><th class="n">cost</th><th class="n">share</th></tr>
+      <tr><td>uncached input</td><td class="n">510k</td><td class="n">$3.52</td><td class="n">0.0%</td></tr>
+      <tr><td>cache write 5m (1.25x)</td><td class="n">90.4M</td><td class="n">$667.26</td><td class="n">5.3%</td></tr>
+      <tr><td>cache write 1h (2x)</td><td class="n">120.5M</td><td class="n">$1,458.92</td><td class="n">11.6%</td></tr>
+      <tr><td>cache read (0.1x)</td><td class="n">16.01B</td><td class="n">$9,367.24</td><td class="n">74.5%</td></tr>
+      <tr><td>output</td><td class="n">35.4M</td><td class="n">$1,076.56</td><td class="n">8.6%</td></tr>
+      <tr class="sep"><td colspan="4"></td></tr>
+      <tr><th>what a naive counter reports</th><th class="n"></th><th class="n">total</th><th class="n">error</th></tr>
+      <tr><td>sums every transcript line</td><td class="n"></td><td class="n">$27,773.46</td><td class="n bad">+121.0%</td></tr>
+      <tr><td>every cache write priced as 5-minute</td><td class="n"></td><td class="n">$12,020.86</td><td class="n meh">−4.4%</td></tr>
+      <tr><td>cache tokens priced as input</td><td class="n"></td><td class="n">$96,481.71</td><td class="n bad">+667.6%</td></tr>
+      <tr><td>cache tokens ignored</td><td class="n"></td><td class="n">$1,078.25</td><td class="n bad">−91.4%</td></tr>
+    </table>
+  </div>
+  <p class="cap">Real output from the author's machine. Prices from platform.claude.com/docs/en/about-claude/pricing, fetched 2026-09-02.</p>
+</section>
+
+<section class="prose">
+  <h2>Three ways counters lie, all measured before a line of this was written</h2>
+  <p>Claude Code writes the exact <code>usage</code> object Anthropic billed into every transcript. The numbers are all there. Reading them correctly is the hard part.</p>
+  <div class="defects">
+    <div class="defect"><div class="num">+121%</div><h3>One response is several lines</h3><p>Claude Code writes one JSONL line per content block, each repeating the full usage. Thinking + text + tool call = counted three times by anything that sums lines. billproof dedupes by message id.</p></div>
+    <div class="defect"><div class="num under">−37.5%</div><h3>Two cache tiers, two prices</h3><p>A 5-minute cache write is 1.25x base. A 1-hour write is 2x. More than half of all turns on this machine used the 1-hour tier. Pricing everything at 1.25x under-reports every one of them.</p></div>
+    <div class="defect"><div class="num">×6.7</div><h3>Cache reads are 0.1x, not 0 and not 1</h3><p>Ignore reads and you under-report by ~90%. Price them as input and you over-report by ~670%. Both mistakes have shipped in real tools this year; the fixes were merged by the author of this one.</p></div>
+  </div>
+</section>
+
+<section id="receipt" class="prose">
+  <h2>The receipt: which turns cost the money, and why</h2>
+  <p>The free scan tells you the true number. The receipt tells you what caused it, turn by turn, with the dollars each cause explains and the evidence fields that fired the rule.</p>
+  <div class="ledger">
+<span class="k">billproof receipt 3860e21c  ·  claude-home  ·  5,409 requests  ·  Total $1,280.59</span>
+<table>
+<tr><th>cause</th><th class="n">turns</th><th class="n">attributed</th><th>meaning</th></tr>
+<tr><td>context-heavy</td><td class="n">4,308</td><td class="n">$987.04</td><td>large context read on every turn</td></tr>
+<tr><td>subagent</td><td class="n">1,482</td><td class="n">$119.71</td><td>work done by subagents</td></tr>
+<tr><td>cache-expired</td><td class="n">14</td><td class="n">$50.73</td><td>idle past the TTL; whole context re-written at write price</td></tr>
+<tr><td>one-hour-write</td><td class="n">3,926</td><td class="n">$50.72</td><td>1-hour writes cost 2x base, 5-minute 1.25x</td></tr>
+<tr class="sep"><td colspan="4"></td></tr>
+<tr><th class="n">#</th><th>gap</th><th class="n">w1h</th><th class="n">read</th></tr>
+<tr><td class="n">406</td><td>9h idle</td><td class="n">600k</td><td class="n">0</td></tr>
+<tr><td class="n">1961</td><td>1h idle</td><td class="n">783k</td><td class="n">0</td></tr>
+<tr><td class="n">386</td><td>3m</td><td class="n">592k</td><td class="n">0</td></tr>
+</table>
+  </div>
+  <p class="cap">Turn 386 re-wrote 592k tokens three minutes after the previous turn, with zero cache reads. That is not an expiry; the prompt prefix changed. billproof labels it <code>prefix-changed</code>.</p>
+  <table class="causes">
+    <tr><th>cause</th><th>rule, in plain words</th></tr>
+    <tr><td>cache-expired</td><td>Idle longer than the cache TTL of the previous write, then most of the context re-written. Attributed: the write-minus-read premium on every re-written token.</td></tr>
+    <tr><td>prefix-changed</td><td>Re-written inside the TTL with few reads. Compaction, an edited system prompt or a changed tool list broke the cached prefix.</td></tr>
+    <tr><td>one-hour-write</td><td>The 0.75x premium of the 1-hour tier over the 5-minute tier, on every 1-hour token.</td></tr>
+    <tr><td>model-switch</td><td>Caches are per model. Switching re-writes the context.</td></tr>
+    <tr><td>context-heavy</td><td>100k+ tokens of context read on the turn. The reads themselves.</td></tr>
+    <tr><td>output-heavy · uncached-paste</td><td>8k+ output tokens; 20k+ uncached input tokens (a paste, an image).</td></tr>
+    <tr><td>subagent · fast-mode · us-only-geo · fallback</td><td>Subagents on their own cache lane; the 2x fast-mode premium; the 1.1x US-only premium; a server-side fallback that billed the declining model's partial output.</td></tr>
+  </table>
+</section>
+
+<section id="price">
+  <h2>Price</h2>
+  <div class="plans">
+    <div class="plan">
+      <div class="name">scan</div>
+      <div class="price">$0</div>
+      <ul>
+        <li>True cost by day, model, project, skill, MCP server, subagent</li>
+        <li>The four naive methods, and how far off each is</li>
+        <li>JSON output; incremental cache; nothing leaves the machine</li>
+      </ul>
+      <a class="btn" href="https://github.com/arthi-arumugam-git/billproof">npx billproof</a>
+    </div>
+    <div class="plan paid">
+      <div class="name">receipt</div>
+      <div class="price">$29<small>once, per person</small></div>
+      <ul>
+        <li>Every turn of a session as a line item with a root cause and the dollars it explains</li>
+        <li>Self-contained HTML receipt you can hand to whoever pays the bill</li>
+        <li>All v0.x and v1.x updates; source is public</li>
+      </ul>
+      <a class="btn primary" id="buy" href="mailto:arthi1805@gmail.com?subject=billproof%20receipt%20license&body=Please%20send%20a%20billproof%20receipt%20license%20(%2429).%20PayPal%20invoice%20is%20fine.">Get a key</a>
+      <div class="note">Card checkout is being set up. Until it is live, this sends an email; you get a PayPal invoice and your key the same day.</div>
+    </div>
+  </div>
+</section>
+
+<section id="faq" class="faq">
+  <h2>Questions</h2>
+  <dl>
+    <dt>I am on Claude Pro or Max. I do not pay per token. Why would I care?</dt>
+    <dd>Subscriptions do not bill per token, but the usage window drains in proportion to what the same requests would cost at API list price. billproof shows that number and says so plainly. When a window jumps from 20% to 90% in one turn, the receipt names the turn and the reason.</dd>
+    <dt>Does anything leave my machine?</dt>
+    <dd>No. The scan and the receipt read <code>~/.claude/projects</code> locally and write nothing anywhere else. The only network call the tool ever makes is validating a license key when you run <code>activate</code>. The source is public so you can check.</dd>
+    <dt>How do you know the prices are right?</dt>
+    <dd>Every price row in the table cites the official pricing page and the date it was fetched. Every pricing rule and every root-cause rule is a unit test. Legacy models not on the current page are flagged <code>price-unverified</code> whenever they are used instead of being silently guessed.</dd>
+    <dt>Which tools does it read?</dt>
+    <dd>Claude Code transcripts today. OpenAI Codex and OpenCode logs are next. Reconciliation against the Anthropic and OpenAI cost APIs for organisations is on the roadmap.</dd>
+    <dt>Refunds?</dt>
+    <dd>If the receipt tells you nothing the free scan did not, reply to your receipt email within 14 days and you get the $29 back.</dd>
+  </dl>
+</section>
+
+<section class="author">
+  <p><b>Arthi Arumugam</b> works on whether a reported number is true. 24 merged upstream fixes in LLM cost and token accounting across inspect_evals (UK AI Security Institute), TruLens (Snowflake), lm-evaluation-harness, Pydantic Logfire and genai-prices, Mistral, LiveKit, Pipecat, deepset and Roboflow; most of them the same defect this tool exists to catch: a number comes out wrong and nothing raises. <a href="https://github.com/arthi-arumugam-git">GitHub</a></p>
+</section>
+
+<footer>
+  <span>© 2026 Arthi Arumugam</span>
+  <a href="https://github.com/arthi-arumugam-git/billproof">github.com/arthi-arumugam-git/billproof</a>
+  <a href="https://www.npmjs.com/package/billproof">npmjs.com/package/billproof</a>
+  <span>MIT</span>
+</footer>
+</div>
+<script>
+document.getElementById("theme").addEventListener("click",function(){var r=document.documentElement;var cur=r.getAttribute("data-theme");var next=cur==="dark"?"light":cur==="light"?"dark":(matchMedia("(prefers-color-scheme: dark)").matches?"light":"dark");r.setAttribute("data-theme",next);try{localStorage.setItem("bp-theme",next);}catch(e){}});
+</script>
+</body>
+</html>

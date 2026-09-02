@@ -1,0 +1,25 @@
+{
+  "name": "billproof",
+  "version": "0.1.0",
+  "description": "Prove your AI bill. Prices every Claude Code request the way Anthropic bills it and shows which turns cost the money and why.",
+  "type": "module",
+  "bin": { "billproof": "./dist/cli.js" },
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": ["claude", "claude-code", "anthropic", "cost", "tokens", "prompt-caching", "billing", "usage"],
+  "author": "Arthi Arumugam",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/arthi-arumugam-git/billproof" },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}
