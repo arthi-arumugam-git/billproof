@@ -32,6 +32,8 @@ export interface DailyUsage {
   write1h: number;
   read: number;
   output: number;
+  /** what the local metering itself says this cost, when it says anything; absent means price at list */
+  usd?: number;
 }
 
 export interface UsageBucket {
@@ -220,7 +222,7 @@ export interface ReconcileReport {
   currency: string;
 }
 
-const tokensOf = (r: DailyUsage | null): number => (r ? r.uncached + r.write5m + r.write1h + r.read + r.output : 0);
+export const tokensOf = (r: DailyUsage | null): number => (r ? r.uncached + r.write5m + r.write1h + r.read + r.output : 0);
 
 export function reconcile(local: DailyUsage[], api: DailyUsage[], cost: ReturnType<typeof costToDaily>, from: string, to: string): ReconcileReport {
   const keys = new Set<string>();
@@ -242,7 +244,7 @@ export function reconcile(local: DailyUsage[], api: DailyUsage[], cost: ReturnTy
     const [d, model] = key.split("|");
     const l = L.get(key) ?? null;
     const a = A.get(key) ?? null;
-    const localUsd = l ? priceDaily(l) : 0;
+    const localUsd = l ? (l.usd ?? priceDaily(l)) : 0;
     const apiPricedUsd = a ? priceDaily(a) : 0;
     const billed = cost.byDayModel.get(key) ?? null;
     const labels: ReconcileLabel[] = [];
@@ -261,19 +263,23 @@ export function reconcile(local: DailyUsage[], api: DailyUsage[], cost: ReturnTy
       const lt = tokensOf(l);
       const at = tokensOf(a);
       const pct = at > 0 ? (lt - at) / at : lt > 0 ? 1 : 0;
-      const localGross = l.uncached + l.write5m + l.write1h + l.read;
-      const apiGross = a.uncached + a.write5m + a.write1h + a.read;
-      if (Math.abs(pct) > 0.01) {
-        if (Math.abs(localGross - apiGross) / Math.max(apiGross, 1) <= 0.01 && Math.abs(l.output - a.output) / Math.max(a.output, 1) <= 0.01) {
-          labels.push("cache-split-drift");
-          note = "total input matches but the uncached / write / read split does not: a cache-convention mismatch (inclusive vs exclusive input, or 5m/1h tier)";
-        } else {
-          labels.push("token-drift");
-          note = pct > 0 ? "local counts more tokens than the provider billed: duplicated lines, retries counted twice, or streaming deltas summed" : "local counts fewer tokens than billed: dropped events, a truncated log, or requests logged elsewhere";
-        }
-      } else if (Math.abs(localUsd - apiPricedUsd) > 0.01 && apiPricedUsd > 0 && Math.abs(localUsd - apiPricedUsd) / apiPricedUsd > 0.005) {
+      const tol = Math.max(at, 1) * 0.01;
+      // an inclusive-input convention counts every cache read inside input_tokens as well, so the local total
+      // lands one cache-read count above the provider's
+      const readsCountedTwice = a.read > 0 && Math.abs(lt - (at + a.read)) <= tol;
+      const splitOff = (["uncached", "write5m", "write1h", "read", "output"] as const).some((k) => Math.abs(l[k] - a[k]) > tol);
+      if (readsCountedTwice) {
+        labels.push("cache-split-drift");
+        note = "local input_tokens include the cache reads (inclusive convention); the provider reports uncached input, so reads are counted twice locally";
+      } else if (Math.abs(pct) > 0.01) {
+        labels.push("token-drift");
+        note = pct > 0 ? "local counts more tokens than the provider billed: duplicated lines, retries counted twice, or streaming deltas summed" : "local counts fewer tokens than billed: dropped events, a truncated log, or requests logged elsewhere";
+      } else if (splitOff) {
+        labels.push("cache-split-drift");
+        note = "totals match but the uncached / write / read split does not: a cache-tier (5m vs 1h) or cache-convention mismatch";
+      } else if (l.usd !== undefined && apiPricedUsd > 0 && Math.abs(localUsd - apiPricedUsd) / apiPricedUsd > 0.005) {
         labels.push("price-drift");
-        note = "tokens match but the priced totals do not: a rate in the local price table is wrong for this day";
+        note = "tokens match but the local dollars do not: the local metering's rate for this model is wrong";
       }
       if (labels.length === 0) labels.push("match");
     }
@@ -311,6 +317,7 @@ export function parseLocalJson(text: string): DailyUsage[] {
       write1h: n(o.write1h ?? o.ephemeral_1h_input_tokens),
       read: n(o.read ?? o.cache_read_input_tokens),
       output: n(o.output ?? o.output_tokens),
+      ...(o.usd ?? o.cost ?? o.cost_usd) !== undefined ? { usd: n(o.usd ?? o.cost ?? o.cost_usd) } : {},
     };
   });
 }

@@ -1,21 +1,46 @@
 {
   "name": "billproof",
-  "version": "0.1.0",
-  "description": "Prove your AI bill. Prices every Claude Code request the way Anthropic bills it and shows which turns cost the money and why.",
+  "version": "0.2.0",
+  "description": "Prove your AI bill. Prices every Claude Code, Codex and Gemini CLI request the way the provider bills it, shows which turns cost the money and why, and reconciles an organisation's Anthropic invoice against its own records.",
   "type": "module",
-  "bin": { "billproof": "./dist/cli.js" },
-  "files": ["dist", "README.md", "LICENSE"],
-  "engines": { "node": ">=20" },
+  "bin": {
+    "billproof": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
     "prepublishOnly": "npm run build && npm test"
   },
-  "keywords": ["claude", "claude-code", "anthropic", "cost", "tokens", "prompt-caching", "billing", "usage"],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "anthropic",
+    "cost",
+    "tokens",
+    "prompt-caching",
+    "billing",
+    "usage",
+    "codex",
+    "gemini",
+    "openai",
+    "reconcile",
+    "admin-api"
+  ],
   "author": "Arthi Arumugam",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/arthi-arumugam-git/billproof" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arthi-arumugam-git/billproof"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",

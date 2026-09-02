@@ -1,6 +1,6 @@
 # billproof
 
-**Prove your AI bill.** `billproof` reads the Claude Code transcripts already on your disk, prices every request the way Anthropic actually bills it, and shows which turns cost the money and why.
+**Prove your AI bill.** `billproof` reads the Claude Code, Codex and Gemini CLI transcripts already on your disk, prices every request the way the provider actually bills it, shows which turns cost the money and why, and reconciles an organisation's Anthropic invoice against its own records.
 
 ```
 npx billproof
@@ -19,6 +19,8 @@ Claude Code's transcripts carry the exact `usage` object Anthropic billed, but t
 `billproof` dedupes by `message.id`, prices each tier at its own rate, prices server-side fallback iterations at their own model, applies the fast-mode and US-only-inference multipliers, and flags anything it could not price with certainty instead of guessing.
 
 ## What you get
+
+Sources: Claude Code (`~/.claude/projects`), Codex (`~/.codex/sessions`) and Gemini CLI (`~/.gemini/tmp`), all read by default; pick one with `--source claude|codex|gemini`. OpenAI reports `cached_input_tokens` inside `input_tokens` and Gemini bills `thoughts` as output; both are normalised to one convention so a single pricing rule applies, and the naive panel shows what the raw numbers would have said.
 
 ### `billproof` (free)
 
@@ -62,6 +64,28 @@ Every turn of a session as a line item with a root cause and the dollars it expl
 `--html receipt.html` writes a self-contained report you can share. `--all` lists every turn. `--json` for machines.
 
 Buy at https://arthi-arumugam-git.github.io/billproof#price ($49 once), then `billproof activate <key>`. The key is emailed on checkout by a merchant of record, so EU and UK VAT is on your invoice. Keys are verified once, cached locally and re-checked weekly with a 30-day offline grace, and one licence covers a set number of machines. The source is open; the gate is a courtesy.
+
+### `billproof reconcile --from --to` (Team, $199 once per organisation)
+
+What the organisation was billed against what its own records say, day by day and model by model, with every difference labelled by the cause that best explains it:
+
+| label | meaning |
+|---|---|
+| match | local records and the provider agree within 1% |
+| local-missing | billed but not in local records: another machine, CI, an app, or a teammate |
+| local-extra | in local records but not billed: a subscription plan, another org's key, or a UTC day boundary |
+| token-drift | token totals differ by more than 1% |
+| cache-split-drift | totals agree but the uncached / write / read split does not, or cache reads are counted twice (inclusive-input convention) |
+| price-drift | tokens agree but the local dollars do not: the local rate for this model is wrong |
+| billed-vs-priced | the cost report differs from usage x list price: discount, credits, batch or priority tier, or web search |
+| unknown-model | no price row; both sides show $0 |
+
+```
+billproof reconcile --from 2026-08-01 --to 2026-08-31                    # local side: the transcripts on this machine
+billproof reconcile --from 2026-08-01 --to 2026-08-31 --local rows.json  # local side: your own metering, one row per day and model
+```
+
+The provider side is Anthropic's Admin API, `usage_report/messages` and `cost_report`, read with `ANTHROPIC_ADMIN_KEY` (an Admin key; organisation accounts only). `rows.json` is `[{day, model, uncached, write5m, write1h, read, output, usd?}]`. `usd` is what your metering says the day cost; when it is present, a matching token count with a different dollar figure is labelled `price-drift`, which is the defect this tool exists for. `--json` for machines.
 
 ## On subscription plans
 

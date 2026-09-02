@@ -6,10 +6,14 @@ import { readTurnsCached, readWholeFilesCached, type CachedReadStats } from "./c
 import { findTranscripts } from "./discover.js";
 import { defaultDir, findSessionFiles, parseSource } from "./sources.js";
 import { renderReceiptHtml } from "./report/html.js";
-import { renderReceipt, renderScan, usd } from "./report/terminal.js";
+import { renderReceipt, renderReconcile, renderScan, usd } from "./report/terminal.js";
 import { activate, checkLicense, licensePath } from "./license.js";
+import { costToDaily, fetchCost, fetchUsage, parseLocalJson, reconcile, turnsToDaily, usageToDaily } from "./reconcile.js";
 import type { Turn } from "./types.js";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
+
+const SITE = "https://arthi-arumugam-git.github.io/billproof";
+const TEAM_PRICE_USD = 199;
 
 const HELP = `billproof — prove your AI bill
 
@@ -20,9 +24,12 @@ Usage
   billproof sessions [--since ...]            list sessions with cost, newest first
   billproof activate <license-key>            unlock receipt on this machine
   billproof license                           show license status
+  billproof reconcile --from YYYY-MM-DD --to YYYY-MM-DD [--local rows.json] [--json]
+                                              Team: local records against the Anthropic usage and cost reports
 
 Reads Claude Code (~/.claude/projects), Codex (~/.codex/sessions) and Gemini CLI (~/.gemini/tmp) sessions.
---dir overrides the directory for a single --source. Nothing leaves your machine except a license check.`;
+--dir overrides the directory for a single --source. Nothing leaves your machine except a license check;
+reconcile additionally calls the Anthropic Admin API with ANTHROPIC_ADMIN_KEY.`;
 
 interface Args {
   cmd: string;
@@ -42,7 +49,7 @@ function parseArgs(argv: string[]): Args {
       else flags[k] = true;
     } else positional.push(a);
   }
-  const known = new Set(["scan", "receipt", "sessions", "activate", "license", "help"]);
+  const known = new Set(["scan", "receipt", "sessions", "activate", "license", "reconcile", "help"]);
   const cmd = positional.length && known.has(positional[0]) ? positional.shift()! : "scan";
   return { cmd, positional, flags };
 }
@@ -59,6 +66,9 @@ function sinceMs(v: string | boolean | undefined): number {
   if (!Number.isFinite(t)) throw new Error(`--since expects 7d, 30d, 12h, 2w or YYYY-MM-DD; got ${v}`);
   return t;
 }
+
+const isDay = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s);
+const dayShift = (day: string, n: number): string => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
 async function loadTurns(
   sources: ReturnType<typeof parseSource>,
@@ -109,7 +119,41 @@ async function main(): Promise<number> {
   }
   if (cmd === "license") {
     const st = await checkLicense();
-    console.log(st.ok ? `Licensed (${st.source}${st.expiresAt ? `, valid to ${st.expiresAt}` : ""}). ${licensePath()}` : `No valid license (${st.reason}). Free scan works; receipt is paid.`);
+    console.log(st.ok ? `Licensed (${st.source}, ${st.tier ?? "solo"} tier${st.expiresAt ? `, valid to ${st.expiresAt}` : ""}). ${licensePath()}` : `No valid license (${st.reason}). Free scan works; receipt and reconcile are paid.`);
+    return 0;
+  }
+
+  if (cmd === "reconcile") {
+    const lic = await checkLicense();
+    if (!lic.ok || lic.tier !== "team") {
+      console.error(
+        `reconcile is the Team tier of billproof ($${TEAM_PRICE_USD} once per organisation). Get a key at ${SITE}#team then run: billproof activate <key>` +
+          (lic.ok ? " (the key on this machine is the solo tier)" : ""),
+      );
+      return 3;
+    }
+    const adminKey = process.env.ANTHROPIC_ADMIN_KEY?.trim();
+    if (!adminKey) {
+      console.error("reconcile needs ANTHROPIC_ADMIN_KEY: an Admin API key (sk-ant-admin...) from console.anthropic.com/settings/admin-keys. Admin keys exist for organisations only; individual accounts have no usage or cost report.");
+      return 2;
+    }
+    const to = typeof flags.to === "string" ? flags.to : new Date().toISOString().slice(0, 10);
+    const from = typeof flags.from === "string" ? flags.from : dayShift(to, -30);
+    if (!isDay(from) || !isDay(to) || from > to) {
+      console.error("--from and --to take YYYY-MM-DD with from on or before to");
+      return 2;
+    }
+    const toExclusive = dayShift(to, 1);
+    let local;
+    if (typeof flags.local === "string") local = parseLocalJson(await readFile(flags.local, "utf8"));
+    else {
+      const loaded = await loadTurns(sources, dirOverride, Date.parse(`${from}T00:00:00Z`), !flags["no-cache"]);
+      local = turnsToDaily(loaded.turns.filter((t) => t.ts < Date.parse(`${toExclusive}T00:00:00Z`)));
+    }
+    const [usage, cost] = await Promise.all([fetchUsage(adminKey, from, toExclusive), fetchCost(adminKey, from, toExclusive)]);
+    const r = reconcile(local, usageToDaily(usage), costToDaily(cost), from, to);
+    if (flags.json) console.log(JSON.stringify(r, null, 2));
+    else console.log(renderReconcile(r));
     return 0;
   }
 
@@ -146,7 +190,7 @@ async function main(): Promise<number> {
     if (!lic.ok) {
       const s = scan(turns, "session");
       console.log(renderScan(s, "session", dir));
-      console.log(`\nreceipt is the paid part of billproof. Get a key at https://arthi-arumugam-git.github.io/billproof then run: billproof activate <key>`);
+      console.log(`\nreceipt is the paid part of billproof. Get a key at ${SITE}#price then run: billproof activate <key>`);
       return 3;
     }
     let sessionId = positional[0];
@@ -173,9 +217,11 @@ async function main(): Promise<number> {
 }
 
 main().then(
-  (code) => process.exit(code),
+  (code) => {
+    process.exitCode = code;
+  },
   (err) => {
     console.error(err instanceof Error ? err.message : String(err));
-    process.exit(1);
+    process.exitCode = 1;
   },
 );

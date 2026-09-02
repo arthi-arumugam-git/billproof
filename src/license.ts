@@ -30,6 +30,20 @@ const DODO_HOST = process.env.BILLPROOF_DODO_HOST ?? "https://live.dodopayments.
  * stranger's unrelated key from unlocking this tool. Empty means "accept any shape".
  */
 export const DODO_KEY_PREFIX = process.env.BILLPROOF_DODO_PREFIX ?? "BILLPROOF-";
+/** Team keys carry a second prefix segment, so a solo key cannot unlock reconcile. */
+export const TEAM_KEY_PREFIX = process.env.BILLPROOF_DODO_TEAM_PREFIX ?? "BILLPROOF-TEAM-";
+
+export type Tier = "solo" | "team";
+
+export function tierOf(key: string): Tier {
+  const k = String(key ?? "").trim();
+  if (TEAM_KEY_PREFIX && k.toUpperCase().startsWith(TEAM_KEY_PREFIX.toUpperCase())) return "team";
+  if (k.startsWith("bp1_")) {
+    const v = verifyOffline(k);
+    if (v.ok && v.payload.plan === "team") return "team";
+  }
+  return "solo";
+}
 
 export const POLAR_ORG_ID = process.env.BILLPROOF_POLAR_ORG ?? "";
 const POLAR_VALIDATE = "https://api.polar.sh/v1/customer-portal/license-keys/validate";
@@ -309,6 +323,7 @@ export async function activate(key: string): Promise<{ ok: true } | { ok: false;
 
 export interface LicenseStatus {
   ok: boolean;
+  tier?: Tier;
   source?: StoredLicense["source"];
   expiresAt?: string;
   reason?: string;
@@ -318,22 +333,23 @@ export async function checkLicense(): Promise<LicenseStatus> {
   const envKey = process.env.BILLPROOF_LICENSE?.trim();
   const lic = envKey ? { key: envKey, source: "env" as const, validatedAt: "1970-01-01T00:00:00Z" } : await load();
   if (!lic) return { ok: false, reason: "no license stored" };
+  const tier = tierOf(lic.key);
 
   if (lic.key.startsWith("bp1_")) {
     const v = verifyOffline(lic.key);
-    return v.ok ? { ok: true, source: lic.source === "env" ? "env" : "signed", expiresAt: v.payload.exp } : { ok: false, reason: v.reason };
+    return v.ok ? { ok: true, tier, source: lic.source === "env" ? "env" : "signed", expiresAt: v.payload.exp } : { ok: false, reason: v.reason };
   }
 
   const age = Date.now() - Date.parse(lic.validatedAt);
-  if (age < REVALIDATE_MS) return { ok: true, source: lic.source, expiresAt: lic.expiresAt };
+  if (age < REVALIDATE_MS) return { ok: true, tier, source: lic.source, expiresAt: lic.expiresAt };
 
   if (lic.source === "dodo" || (lic.source === "env" && looksLikeDodoKey(lic.key))) {
     const v = await validateDodo(lic.key);
     if (v.ok) {
       if (lic.source !== "env") await store({ ...lic, validatedAt: new Date().toISOString() });
-      return { ok: true, source: lic.source };
+      return { ok: true, tier, source: lic.source };
     }
-    if (v.network && age < GRACE_MS) return { ok: true, source: lic.source, reason: "offline; within grace" };
+    if (v.network && age < GRACE_MS) return { ok: true, tier, source: lic.source, reason: "offline; within grace" };
     return { ok: false, reason: v.reason };
   }
 
@@ -341,17 +357,17 @@ export async function checkLicense(): Promise<LicenseStatus> {
     const g = await validateGumroad(lic.key);
     if (g.ok) {
       if (lic.source !== "env") await store({ ...lic, validatedAt: new Date().toISOString(), customer: g.customer });
-      return { ok: true, source: lic.source };
+      return { ok: true, tier, source: lic.source };
     }
-    if (g.network && age < GRACE_MS) return { ok: true, source: lic.source, reason: "offline; within grace" };
+    if (g.network && age < GRACE_MS) return { ok: true, tier, source: lic.source, reason: "offline; within grace" };
     return { ok: false, reason: g.reason };
   }
 
   const v = await validatePolar(lic.key);
   if (v.ok) {
     if (lic.source !== "env") await store({ ...lic, validatedAt: new Date().toISOString(), expiresAt: v.expiresAt, customer: v.customer });
-    return { ok: true, source: lic.source, expiresAt: v.expiresAt };
+    return { ok: true, tier, source: lic.source, expiresAt: v.expiresAt };
   }
-  if (v.network && age < GRACE_MS) return { ok: true, source: lic.source, expiresAt: lic.expiresAt, reason: "offline; within grace" };
+  if (v.network && age < GRACE_MS) return { ok: true, tier, source: lic.source, expiresAt: lic.expiresAt, reason: "offline; within grace" };
   return { ok: false, reason: v.reason };
 }

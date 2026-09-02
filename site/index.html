@@ -91,7 +91,7 @@ footer{font-family:var(--mono);font-size:.78rem;color:var(--dim);margin-top:64px
 
 <section class="hero">
   <h1>Prove your <em>AI bill.</em></h1>
-  <p class="lede">billproof reads the Claude Code transcripts already on your disk, prices every request the way Anthropic bills it, and tells you which turns cost the money and why. Nothing leaves your machine.</p>
+  <p class="lede">billproof reads the Claude Code, Codex and Gemini CLI transcripts already on your disk, prices every request the way the provider bills it, and tells you which turns cost the money and why. Nothing leaves your machine.</p>
   <div class="install"><span class="p">$</span> npx billproof</div>
 
   <div class="ledger" aria-label="real scan output">
@@ -180,6 +180,17 @@ footer{font-family:var(--mono);font-size:.78rem;color:var(--dim);margin-top:64px
       <a class="btn primary" id="buy" href="https://github.com/arthi-arumugam-git/billproof#licence">Buy · card or UPI</a>
       <div class="note">Instant delivery: your licence key is emailed the moment the payment clears, then run <code>billproof activate &lt;key&gt;</code>.</div>
     </div>
+    <div class="plan" id="team">
+      <div class="name">reconcile</div>
+      <div class="price">$199<small>once, per organisation</small></div>
+      <ul>
+        <li>Your organisation's Anthropic usage and cost reports against your own records, day by day and model by model</li>
+        <li>Every difference labelled with its likely cause: reads counted twice, a wrong rate, a machine you did not know about, a discount you did not know you had</li>
+        <li>Local side is the Claude Code transcripts or a JSON export from your own metering; needs an Admin API key</li>
+      </ul>
+      <a class="btn" id="buy-team" href="https://github.com/arthi-arumugam-git/billproof#licence">Buy · card or UPI</a>
+      <div class="note">Team keys start with <code>BILLPROOF-TEAM-</code> and activate on up to 10 machines.</div>
+    </div>
   </div>
 </section>
 
@@ -198,7 +209,9 @@ footer{font-family:var(--mono);font-size:.78rem;color:var(--dim);margin-top:64px
     <dd>It is emailed to you straight after checkout, and shown on the receipt page. Nothing waits on a human. Paste it into <code>billproof activate &lt;key&gt;</code>. The checkout is a merchant of record, so EU and UK VAT is handled on the invoice you receive.</dd>
     <dt>Refunds?</dt>
     <dd>If the receipt tells you nothing the free scan did not, reply to your receipt email within 14 days and you get the $49 back.</dd>
-  </dl>
+      <dt>What does reconcile need that receipt does not?</dt>
+    <dd>An Anthropic Admin API key, which only organisation accounts have, and the Team licence. It reads two Admin endpoints, the usage report and the cost report, and compares them with the records on your side. Nothing else leaves the machine.</dd>
+</dl>
 </section>
 
 <section class="author">

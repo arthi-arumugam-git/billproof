@@ -1,5 +1,6 @@
 import type { Receipt } from "../analyze/receipt.js";
 import type { ScanResult } from "../analyze/scan.js";
+import { tokensOf, type ReconcileReport } from "../reconcile.js";
 
 const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
 const c = {
@@ -151,3 +152,68 @@ export const CAUSE_TEXT: Record<string, string> = {
   "tier-unknown": "older transcript without the 5m/1h split; priced as 5m",
   "price-unverified": "legacy model price not on the current pricing page",
 };
+
+export const LABEL_TEXT: Record<string, string> = {
+  match: "local records and the provider agree within 1%",
+  "local-missing": "billed but not in local records: another machine, CI, an app, or a teammate",
+  "local-extra": "in local records but not billed: a subscription plan, another org's key, or a UTC day boundary",
+  "token-drift": "token totals differ by more than 1%",
+  "cache-split-drift": "totals agree but the uncached / write / read split does not, or cache reads are counted twice",
+  "price-drift": "tokens agree but the local dollars do not: the local rate for this model is wrong",
+  "billed-vs-priced": "the cost report differs from usage x list price: discount, credits, batch or priority tier, or web search",
+  "unknown-model": "no price row; both sides show $0",
+};
+
+export function renderReconcile(r: ReconcileReport): string {
+  const out: string[] = [];
+  out.push(c.bold(`billproof reconcile`) + c.dim(`  ${r.from} to ${r.to}, UTC days; Anthropic organisation reports vs local records`));
+  out.push("");
+  const t = r.totals;
+  const tokDelta = t.apiTokens > 0 ? pct((t.localTokens - t.apiTokens) / t.apiTokens) : "-";
+  const usdDelta = t.apiPricedUsd > 0 ? pct((t.localUsd - t.apiPricedUsd) / t.apiPricedUsd) : "-";
+  const billedDelta = t.apiPricedUsd > 0 ? pct((t.billedUsd - t.apiPricedUsd) / t.apiPricedUsd) : "-";
+  out.push(c.bold(`Totals`));
+  out.push(
+    table(
+      ["side", "tokens", "dollars", "against the usage report"],
+      [
+        ["local records", tok(t.localTokens), usd(t.localUsd), `${tokDelta} tokens, ${usdDelta} dollars`],
+        ["provider usage report, at list price", tok(t.apiTokens), usd(t.apiPricedUsd), "-"],
+        ["provider cost report, as billed", "-", `${usd(t.billedUsd)} ${r.currency}`, `${billedDelta} against usage x list`],
+      ],
+      ["l", "r", "r", "l"],
+    ),
+  );
+  out.push("");
+  out.push(c.bold(`By day and model`));
+  out.push(
+    table(
+      ["day", "model", "local tok", "api tok", "delta", "local $", "api $", "billed $", "labels"],
+      r.rows.map((row) => [
+        row.day,
+        row.model.replace("claude-", ""),
+        row.local ? tok(tokensOf(row.local)) : "-",
+        row.api ? tok(tokensOf(row.api)) : "-",
+        row.tokenDeltaPct === null ? "-" : pct(row.tokenDeltaPct),
+        usd(row.localUsd),
+        usd(row.apiPricedUsd),
+        row.billedUsd === null ? "-" : usd(row.billedUsd),
+        (row.labels.every((l) => l === "match") ? c.green : c.red)(row.labels.join(",")),
+      ]),
+      ["l", "l", "r", "r", "r", "r", "r", "r", "l"],
+    ),
+  );
+  out.push("");
+  out.push(c.bold(`What the labels mean`));
+  for (const [label, count] of Object.entries(r.byLabel)) out.push(`${`${label} x${count}`.padEnd(24)} ${LABEL_TEXT[label] ?? ""}`);
+  const notes = r.rows.filter((x) => x.note);
+  if (notes.length) {
+    out.push("");
+    out.push(c.bold(`Rows to check`));
+    for (const x of notes.slice(0, 30)) out.push(`${x.day} ${x.model}: ${x.note}`);
+    if (notes.length > 30) out.push(c.dim(`... ${notes.length - 30} more; --json has all of them`));
+  }
+  out.push("");
+  out.push(c.dim(`Provider side: /v1/organizations/usage_report/messages and /v1/organizations/cost_report, daily buckets grouped by model; both need an Admin API key.`));
+  return out.join("\n");
+}
