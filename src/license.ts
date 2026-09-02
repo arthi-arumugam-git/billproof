@@ -1,5 +1,5 @@
 import { createPublicKey, verify as cryptoVerify } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 
@@ -24,25 +24,30 @@ import { join } from "node:path";
  * answers {"valid":false} for an unknown key.
  */
 const DODO_HOST = process.env.BILLPROOF_DODO_HOST ?? "https://live.dodopayments.com";
-/**
- * Dodo's validate endpoint takes only the key, so a key from any Dodo merchant would validate.
- * Giving the product a licence-key prefix in the Dodo dashboard and checking it here keeps a
- * stranger's unrelated key from unlocking this tool. Empty means "accept any shape".
- */
-export const DODO_KEY_PREFIX = process.env.BILLPROOF_DODO_PREFIX ?? "BILLPROOF-";
-/** Team keys carry a second prefix segment, so a solo key cannot unlock reconcile. */
-export const TEAM_KEY_PREFIX = process.env.BILLPROOF_DODO_TEAM_PREFIX ?? "BILLPROOF-TEAM-";
-
 export type Tier = "solo" | "team";
 
-export function tierOf(key: string): Tier {
-  const k = String(key ?? "").trim();
-  if (TEAM_KEY_PREFIX && k.toUpperCase().startsWith(TEAM_KEY_PREFIX.toUpperCase())) return "team";
-  if (k.startsWith("bp1_")) {
-    const v = verifyOffline(k);
+/**
+ * Dodo's validate endpoint takes only the key, so a key from any Dodo merchant would validate. The
+ * activate endpoint answers with the product the key was sold for (`product.product_id`), and that
+ * is the check: only a key sold for one of these products unlocks the tool, and the product says
+ * which tier. Dodo keys carry no prefix, so nothing about a key's shape is trusted.
+ */
+export const DODO_PRODUCTS: Readonly<Record<string, Tier>> = {
+  pdt_0NmiiAAeYrdTABT4lpTtJ: "solo", // billproof receipt licence, $49 once
+  pdt_0NmiitBKHHwsTMzynyfr7: "team", // billproof reconcile licence (Team), $199 once per organisation
+};
+
+export function tierOfProduct(productId: string | undefined | null): Tier | undefined {
+  return productId ? DODO_PRODUCTS[productId] : undefined;
+}
+
+/** Tier for keys that did not come through Dodo activation: signed keys carry a plan, an env key can name one. */
+export function tierOfKey(key: string): Tier {
+  if (key.startsWith("bp1_")) {
+    const v = verifyOffline(key);
     if (v.ok && v.payload.plan === "team") return "team";
   }
-  return "solo";
+  return process.env.BILLPROOF_LICENSE_TIER === "team" ? "team" : "solo";
 }
 
 export const POLAR_ORG_ID = process.env.BILLPROOF_POLAR_ORG ?? "";
@@ -76,6 +81,9 @@ export interface StoredLicense {
   customer?: string;
   /** Dodo returns an activation instance; keeping its id lets a machine be released later. */
   instanceId?: string;
+  /** the Dodo product the key was sold for, which is what decides the tier */
+  productId?: string;
+  tier?: Tier;
 }
 
 export function licensePath(): string {
@@ -126,12 +134,13 @@ interface DodoActivateResponse {
   license_key_instance_id?: string;
   name?: string;
   message?: string;
+  product?: { product_id?: string; name?: string | null };
 }
 
 export function looksLikeDodoKey(key: string): boolean {
   const k = String(key ?? "").trim();
   if (k.length < 8) return false;
-  return DODO_KEY_PREFIX ? k.toUpperCase().startsWith(DODO_KEY_PREFIX.toUpperCase()) : true;
+  return !k.startsWith("bp1_");
 }
 
 async function dodoPost(path: string, body: unknown, fetchImpl: typeof fetch): Promise<{ ok: true; data: unknown } | { ok: false; reason: string; network?: boolean }> {
@@ -175,12 +184,12 @@ export async function activateDodo(
   key: string,
   deviceName: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ ok: true; instanceId?: string } | { ok: false; reason: string; network?: boolean }> {
+): Promise<{ ok: true; instanceId: string; productId?: string } | { ok: false; reason: string; network?: boolean }> {
   const r = await dodoPost("/licenses/activate", { license_key: String(key).trim(), name: deviceName }, fetchImpl);
   if (!r.ok) return r;
   const data = r.data as DodoActivateResponse;
   const instanceId = data.id ?? data.license_key_instance_id;
-  if (instanceId) return { ok: true, instanceId };
+  if (instanceId) return { ok: true, instanceId, productId: data.product?.product_id };
   // some failures come back 200 with a message and no instance
   return { ok: false, reason: data.message ?? "Dodo did not return an activation; the activation limit may be reached" };
 }
@@ -297,9 +306,14 @@ export async function activate(key: string): Promise<{ ok: true } | { ok: false;
     if (v.ok) {
       const device = `${hostname()} (${process.platform})`;
       const a = await activateDodo(key, device);
-      // an activation-limit failure is not a reason to refuse a valid licence; the key still works,
-      // this machine simply does not hold a slot, and validate keeps answering
-      await store({ key, source: "dodo", validatedAt: new Date().toISOString(), instanceId: a.ok ? a.instanceId : undefined });
+      // the activation answer is what names the product, so without a slot there is no tier to grant
+      if (!a.ok) return { ok: false, reason: a.network ? a.reason : `${a.reason}. Run \`billproof deactivate\` on a machine that no longer needs it.` };
+      const tier = tierOfProduct(a.productId);
+      if (!tier) {
+        await deactivateDodo(key, a.instanceId);
+        return { ok: false, reason: "that key was sold for a different product" };
+      }
+      await store({ key, source: "dodo", validatedAt: new Date().toISOString(), instanceId: a.instanceId, productId: a.productId, tier });
       return { ok: true };
     }
     if (!v.network) return { ok: false, reason: v.reason };
@@ -321,6 +335,18 @@ export async function activate(key: string): Promise<{ ok: true } | { ok: false;
   return { ok: true };
 }
 
+/** Hand this machine's slot back and forget the key, so the licence can move to another machine. */
+export async function deactivate(): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const lic = await load();
+  if (!lic) return { ok: false, reason: "no license stored on this machine" };
+  if (lic.source === "dodo" && lic.instanceId) {
+    const released = await deactivateDodo(lic.key, lic.instanceId);
+    if (!released) return { ok: false, reason: "Dodo did not release the slot; check the network and try again" };
+  }
+  await unlink(licensePath());
+  return { ok: true };
+}
+
 export interface LicenseStatus {
   ok: boolean;
   tier?: Tier;
@@ -333,7 +359,7 @@ export async function checkLicense(): Promise<LicenseStatus> {
   const envKey = process.env.BILLPROOF_LICENSE?.trim();
   const lic = envKey ? { key: envKey, source: "env" as const, validatedAt: "1970-01-01T00:00:00Z" } : await load();
   if (!lic) return { ok: false, reason: "no license stored" };
-  const tier = tierOf(lic.key);
+  const tier: Tier = lic.tier ?? tierOfKey(lic.key);
 
   if (lic.key.startsWith("bp1_")) {
     const v = verifyOffline(lic.key);

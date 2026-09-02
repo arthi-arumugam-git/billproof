@@ -1,6 +1,6 @@
 {
   "name": "billproof",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Prove your AI bill. Prices every Claude Code, Codex and Gemini CLI request the way the provider bills it, shows which turns cost the money and why, and reconciles an organisation's Anthropic invoice against its own records.",
   "type": "module",
   "bin": {

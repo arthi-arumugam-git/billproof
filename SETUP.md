@@ -24,25 +24,20 @@ The name `billproof` was unclaimed on npm and PyPI when checked on 2026-09-02. I
 
 ---
 
-## 2. Create the Dodo Payments product (about 15 minutes)
+## 2. Dodo Payments: done on 2026-09-02, one thing left
 
-Gumroad did not work. **Dodo Payments** is the replacement, and it is a better fit anyway: it is an Indian company, it is the merchant of record so EU and UK VAT is handled for you, and its own FAQ says *"You can onboard as an individual and start receiving international payments without any hassle"* — no registered business needed.
+Both products and their licence-key entitlements exist in **Live Mode** on the `wrong-numbers` Dodo account, and the checkout pages render:
 
-Its licence-key endpoints are public and need no API key, which is why neither product needs a server. Verified live on 2026-09-02: `POST https://live.dodopayments.com/licenses/validate` with `{license_key}` answers `{"valid":false}` for an unknown key, and it works from a browser too.
+| product | price | product id | entitlement (activations) | checkout |
+|---|---|---|---|---|
+| billproof receipt licence | $49 once | `pdt_0NmiiAAeYrdTABT4lpTtJ` | `ent_0NmifwFipPX02W9Dpynqn` (3) | https://checkout.dodopayments.com/buy/pdt_0NmiiAAeYrdTABT4lpTtJ?quantity=1 |
+| billproof reconcile licence (Team) | $199 once | `pdt_0NmiitBKHHwsTMzynyfr7` | `ent_0NmihMg0GkYhYy1lhz5mn` (10) | https://checkout.dodopayments.com/buy/pdt_0NmiitBKHHwsTMzynyfr7?quantity=1 |
 
-1. Sign up at **dodopayments.com**, onboard as an **individual**, and add your Indian bank details.
-2. Go to **Entitlements** → **+** → choose **License Key**. Configure:
-   - **Activations limit**: `3` (one licence, a laptop, a desktop and a spare).
-   - **Duration**: leave blank for a one-time purchase that never expires.
-   - **Activation instructions**: `Run: npx billproof activate <key>`
-   - **Prefix**: `BILLPROOF-` — this matters. The validate endpoint takes only the key, so the prefix is what stops an unrelated Dodo key from unlocking this tool. The code already expects exactly this prefix.
-3. Create the product: `billproof receipt licence`, **$49**, one-time. Attach the entitlement from step 2.
-4. Team tier, same two steps again: a second **License Key** entitlement with activations limit `10` and prefix `BILLPROOF-TEAM-` (exactly that; the CLI reads the tier from the prefix alone), attached to a product `billproof reconcile licence (Team)`, **$199**, one-time.
-5. Publish both, then send Claude the two **checkout URLs**. One line each changes on the landing page and in the CLI.
+The landing page's two Buy buttons point at those links. The CLI reads the tier from the product id that Dodo's activate call returns (`src/license.ts`, `DODO_PRODUCTS`), because Dodo's licence keys carry **no prefix**; an earlier draft of this file assumed one, and that assumption is gone from the code.
 
-Nothing else is needed — no product ID in the code, because Dodo validates by key alone and the prefix does the scoping.
+**The one thing left is verification.** Dodo's dashboard says *"Complete verification to activate live payments and payouts. Most reviews finish within 72 hours."* Until it is approved, a customer can reach the checkout page but the payment will not settle and nothing pays out. Go to **Verification** in the dashboard, choose **Individual**, and finish the identity, PAN and bank steps; the banner "PRODUCT INFORMATION FORM PENDING" is part of the same flow. This needs your documents and your bank account, so it is yours alone.
 
-### Test the whole loop once
+### Test the whole loop once verification is approved
 
 Buy your own product at $49 (you get it back minus the fee, and it proves the machine works end to end):
 
@@ -52,11 +47,11 @@ npx billproof license
 npx billproof receipt --last
 ```
 
-If those three work, a stranger anywhere can buy at 3am and be running the paid tool a minute later with no involvement from you.
+If those three work, a stranger anywhere can buy at 3am and be running the paid tool a minute later with no involvement from you. `npx billproof deactivate` hands a machine's slot back when you move.
 
-### If Dodo also fails
+### If Dodo fails
 
-The code already accepts **Polar** keys as well; its endpoint is verified live too. Polar takes 5% + 50c against Dodo's 4% + 40c, and it onboards Indian individuals through Stripe Connect Express. Set `BILLPROOF_POLAR_ORG` and it works. Failing both, `node scripts/issue-key.mjs <email>` issues a signed offline key by hand and you invoice however you like.
+The code still accepts **Polar** keys (set `BILLPROOF_POLAR_ORG`) and signed offline keys from `node scripts/issue-key.mjs <email>`; a signed key with `"plan":"team"` in its payload unlocks reconcile.
 
 ## 3. Post the launch threads (about 30 minutes, do this AFTER 1 and 2)
 

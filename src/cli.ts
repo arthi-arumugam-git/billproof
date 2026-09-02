@@ -7,7 +7,7 @@ import { findTranscripts } from "./discover.js";
 import { defaultDir, findSessionFiles, parseSource } from "./sources.js";
 import { renderReceiptHtml } from "./report/html.js";
 import { renderReceipt, renderReconcile, renderScan, usd } from "./report/terminal.js";
-import { activate, checkLicense, licensePath } from "./license.js";
+import { activate, checkLicense, deactivate, licensePath } from "./license.js";
 import { costToDaily, fetchCost, fetchUsage, parseLocalJson, reconcile, turnsToDaily, usageToDaily } from "./reconcile.js";
 import type { Turn } from "./types.js";
 import { readFile, writeFile } from "node:fs/promises";
@@ -24,6 +24,7 @@ Usage
   billproof sessions [--since ...]            list sessions with cost, newest first
   billproof activate <license-key>            unlock receipt on this machine
   billproof license                           show license status
+  billproof deactivate                        release this machine's licence slot
   billproof reconcile --from YYYY-MM-DD --to YYYY-MM-DD [--local rows.json] [--json]
                                               Team: local records against the Anthropic usage and cost reports
 
@@ -49,7 +50,7 @@ function parseArgs(argv: string[]): Args {
       else flags[k] = true;
     } else positional.push(a);
   }
-  const known = new Set(["scan", "receipt", "sessions", "activate", "license", "reconcile", "help"]);
+  const known = new Set(["scan", "receipt", "sessions", "activate", "license", "deactivate", "reconcile", "help"]);
   const cmd = positional.length && known.has(positional[0]) ? positional.shift()! : "scan";
   return { cmd, positional, flags };
 }
@@ -115,6 +116,11 @@ async function main(): Promise<number> {
     }
     const r = await activate(key);
     console.log(r.ok ? `Activated. Stored at ${licensePath()}` : `Could not activate: ${r.reason}`);
+    return r.ok ? 0 : 1;
+  }
+  if (cmd === "deactivate") {
+    const r = await deactivate();
+    console.log(r.ok ? "Released. This machine no longer holds a licence slot." : `Could not release: ${r.reason}`);
     return r.ok ? 0 : 1;
   }
   if (cmd === "license") {

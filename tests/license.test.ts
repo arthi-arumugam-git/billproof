@@ -106,13 +106,18 @@ describe("Dodo Payments keys", () => {
   const jsonOk = (body: unknown, status = 200): Response =>
     ({ status, ok: status < 400, json: async () => body }) as unknown as Response;
 
-  it("recognises keys by the product's licence-key prefix", async () => {
+  it("trusts nothing about a key's shape beyond its length: Dodo keys carry no prefix, the product decides", async () => {
     const { looksLikeDodoKey } = await import("../src/license.js?dodoshape");
-    expect(looksLikeDodoKey("BILLPROOF-AAAA-BBBB-CCCC")).toBe(true);
-    expect(looksLikeDodoKey("billproof-aaaa-bbbb-cccc")).toBe(true); // case is not the customer's problem
-    expect(looksLikeDodoKey("  BILLPROOF-AAAA-BBBB  ")).toBe(true);
-    expect(looksLikeDodoKey("SOMEONE-ELSES-KEY-1234")).toBe(false);
+    expect(looksLikeDodoKey("ABCD-EFGH-IJKL-MNOP")).toBe(true);
+    expect(looksLikeDodoKey("  ABCD-EFGH-IJKL  ")).toBe(true);
     expect(looksLikeDodoKey("short")).toBe(false);
+    expect(looksLikeDodoKey("bp1_payload.signature")).toBe(false); // signed keys take the offline path
+  });
+
+  it("activation names the product the key was sold for, which is what decides the tier", async () => {
+    const { activateDodo } = await import("../src/license.js?dodoproduct");
+    const a = await activateDodo("K", "laptop", async () => jsonOk({ id: "inst_1", product: { product_id: "pdt_0NmiitBKHHwsTMzynyfr7", name: null } }));
+    expect(a).toEqual({ ok: true, instanceId: "inst_1", productId: "pdt_0NmiitBKHHwsTMzynyfr7" });
   });
 
   it("accepts a valid key and reports Dodo's own message when it is not", async () => {

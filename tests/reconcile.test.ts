@@ -12,7 +12,7 @@ import {
   usageToDaily,
   type DailyUsage,
 } from "../src/reconcile.js";
-import { tierOf } from "../src/license.js";
+import { tierOfProduct } from "../src/license.js";
 import { renderReconcile } from "../src/report/terminal.js";
 import type { Turn } from "../src/types.js";
 
@@ -187,10 +187,10 @@ describe("Admin API fetch", () => {
 });
 
 describe("licence tiers", () => {
-  it("a Team key is the product prefix plus TEAM; solo keys and strangers are not", () => {
-    expect(tierOf("BILLPROOF-TEAM-ABCD-1234")).toBe("team");
-    expect(tierOf("billproof-team-abcd")).toBe("team");
-    expect(tierOf("BILLPROOF-ABCD-1234")).toBe("solo");
-    expect(tierOf("")).toBe("solo");
+  it("the tier is the Dodo product the key was sold for", () => {
+    expect(tierOfProduct("pdt_0NmiitBKHHwsTMzynyfr7")).toBe("team");
+    expect(tierOfProduct("pdt_0NmiiAAeYrdTABT4lpTtJ")).toBe("solo");
+    expect(tierOfProduct("pdt_someone_else")).toBeUndefined();
+    expect(tierOfProduct(undefined)).toBeUndefined();
   });
 });
