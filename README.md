@@ -61,7 +61,7 @@ Every turn of a session as a line item with a root cause and the dollars it expl
 
 `--html receipt.html` writes a self-contained report you can share. `--all` lists every turn. `--json` for machines.
 
-Get a key at https://arthi-arumugam-git.github.io/billproof, then `billproof activate <key>`. Keys are validated once and cached locally; the source is open, the gate is a courtesy.
+Buy at https://arthi-arumugam-git.github.io/billproof#price ($29 once, card or PayPal), then `billproof activate <key>`. Gumroad emails the key on checkout and acts as merchant of record, so EU and UK VAT is on your invoice. Keys are verified once, cached locally and re-checked weekly with a 30-day offline grace; the source is open, the gate is a courtesy.
 
 ## On subscription plans
 

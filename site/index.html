@@ -177,8 +177,8 @@ footer{font-family:var(--mono);font-size:.78rem;color:var(--dim);margin-top:64px
         <li>Self-contained HTML receipt you can hand to whoever pays the bill</li>
         <li>All v0.x and v1.x updates; source is public</li>
       </ul>
-      <a class="btn primary" id="buy" href="mailto:arthi1805@gmail.com?subject=billproof%20receipt%20license&body=Please%20send%20a%20billproof%20receipt%20license%20(%2429).%20PayPal%20invoice%20is%20fine.">Get a key</a>
-      <div class="note">Card checkout is being set up. Until it is live, this sends an email; you get a PayPal invoice and your key the same day.</div>
+      <a class="btn primary" id="buy" href="https://gumroad.com/l/billproof" data-gumroad>Buy · card or PayPal</a>
+      <div class="note">Instant delivery. Gumroad emails your licence key the moment the payment clears, then run <code>billproof activate &lt;key&gt;</code>.</div>
     </div>
   </div>
 </section>
@@ -194,6 +194,8 @@ footer{font-family:var(--mono);font-size:.78rem;color:var(--dim);margin-top:64px
     <dd>Every price row in the table cites the official pricing page and the date it was fetched. Every pricing rule and every root-cause rule is a unit test. Legacy models not on the current page are flagged <code>price-unverified</code> whenever they are used instead of being silently guessed.</dd>
     <dt>Which tools does it read?</dt>
     <dd>Claude Code transcripts today. OpenAI Codex and OpenCode logs are next. Reconciliation against the Anthropic and OpenAI cost APIs for organisations is on the roadmap.</dd>
+    <dt>How do I get the key after paying?</dt>
+    <dd>Gumroad emails it to you straight after checkout, and it is also on the receipt page. Nothing waits on a human. Paste it into <code>billproof activate &lt;key&gt;</code>. Gumroad is the merchant of record, so EU and UK VAT is handled on the invoice you receive.</dd>
     <dt>Refunds?</dt>
     <dd>If the receipt tells you nothing the free scan did not, reply to your receipt email within 14 days and you get the $29 back.</dd>
   </dl>
