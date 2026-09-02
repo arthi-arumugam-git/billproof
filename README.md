@@ -41,7 +41,7 @@ cache-blind      $1,078.25   -91.4%
 
 Group with `--by day|model|project|skill|mcp|agent|session`. Window with `--since 7d`. Machine output with `--json`.
 
-### `billproof receipt <session>` (paid, $29 once)
+### `billproof receipt <session>` (paid, $49 once)
 
 Every turn of a session as a line item with a root cause and the dollars it explains:
 
@@ -61,7 +61,7 @@ Every turn of a session as a line item with a root cause and the dollars it expl
 
 `--html receipt.html` writes a self-contained report you can share. `--all` lists every turn. `--json` for machines.
 
-Buy at https://arthi-arumugam-git.github.io/billproof#price ($29 once), then `billproof activate <key>`. The key is emailed on checkout by a merchant of record, so EU and UK VAT is on your invoice. Keys are verified once, cached locally and re-checked weekly with a 30-day offline grace, and one licence covers a set number of machines. The source is open; the gate is a courtesy.
+Buy at https://arthi-arumugam-git.github.io/billproof#price ($49 once), then `billproof activate <key>`. The key is emailed on checkout by a merchant of record, so EU and UK VAT is on your invoice. Keys are verified once, cached locally and re-checked weekly with a 30-day offline grace, and one licence covers a set number of machines. The source is open; the gate is a courtesy.
 
 ## On subscription plans
 

@@ -36,14 +36,14 @@ Its licence-key endpoints are public and need no API key, which is why neither p
    - **Duration**: leave blank for a one-time purchase that never expires.
    - **Activation instructions**: `Run: npx billproof activate <key>`
    - **Prefix**: `BILLPROOF-` — this matters. The validate endpoint takes only the key, so the prefix is what stops an unrelated Dodo key from unlocking this tool. The code already expects exactly this prefix.
-3. Create the product: `billproof receipt licence`, **$29**, one-time. Attach the entitlement from step 2.
+3. Create the product: `billproof receipt licence`, **$49**, one-time. Attach the entitlement from step 2.
 4. Publish, then send Claude the **checkout URL**. One line changes on the landing page and in the CLI.
 
 Nothing else is needed — no product ID in the code, because Dodo validates by key alone and the prefix does the scoping.
 
 ### Test the whole loop once
 
-Buy your own product at $29 (you get it back minus the fee, and it proves the machine works end to end):
+Buy your own product at $49 (you get it back minus the fee, and it proves the machine works end to end):
 
 ```
 npx billproof activate <the key from the email>

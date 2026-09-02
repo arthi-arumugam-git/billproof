@@ -108,7 +108,7 @@ Every rule and every price row is a unit test. A golden test prices a fixture di
 ## Distribution
 
 - npm `billproof` (`npx billproof`), GitHub `arthi-arumugam-git/billproof`. MIT. The license gate is a courtesy gate, not DRM.
-- Landing page on Vercel (`billproof.vercel.app` until a domain exists): problem, live sample output, price ($29 lifetime for receipt), FAQ, author proof.
+- Landing page on Vercel (`billproof.vercel.app` until a domain exists): problem, live sample output, price ($49 once for receipt), FAQ, author proof.
 - Checkout: Polar (merchant of record, accepts Indian individuals, handles EU VAT); PayPal payment link as the day-one fallback with hand-issued keys.
 - Launch: Show HN, r/ClaudeAI, r/ClaudeCode, X. Drafts in `docs/launch/`, posted by Arthi only.
 

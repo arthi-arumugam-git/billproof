@@ -21,7 +21,7 @@ On my machine, five weeks of Claude Code:
 
 74.5% of the true number is cache reads at 0.1x. That's the thing most counters get wrong in one direction or the other.
 
-`npx billproof` is free and local; nothing leaves the machine. The paid part ($29 once) is a per-turn receipt that labels why a turn cost what it did: idle past the cache TTL, a prompt prefix that changed inside the TTL (compaction, edited system prompt), 1-hour tier premium, subagents on their own cache lane, fast mode, US-only routing, server-side fallback.
+`npx billproof` is free and local; nothing leaves the machine. The paid part ($49 once) is a per-turn receipt that labels why a turn cost what it did: idle past the cache TTL, a prompt prefix that changed inside the TTL (compaction, edited system prompt), 1-hour tier premium, subagents on their own cache lane, fast mode, US-only routing, server-side fallback.
 
 Source: https://github.com/arthi-arumugam-git/billproof
 
@@ -43,7 +43,7 @@ Three things trip up the counters I've seen posted:
 
 `npx billproof` gives you the true total by day, model, project, skill, MCP server and subagent, and shows the four wrong methods next to it. Free, local, no upload.
 
-The paid receipt ($29 once) goes turn by turn: "9h idle, 600k tokens re-written at write price instead of read price, $6.03" and so on. It also catches the case where the cache is re-written three minutes after the last turn with zero reads, which is not an expiry but a changed prefix, usually compaction.
+The paid receipt ($49 once) goes turn by turn: "9h idle, 600k tokens re-written at write price instead of read price, $6.03" and so on. It also catches the case where the cache is re-written three minutes after the last turn with zero reads, which is not an expiry but a changed prefix, usually compaction.
 
 Repo: https://github.com/arthi-arumugam-git/billproof. If you are on Max and never see a dollar figure, the number still tracks how fast the window drains, and the tool says so instead of pretending.
 
@@ -57,7 +57,7 @@ Same as r/ClaudeAI, title: "billproof: which turn ate your usage window, and why
 
 2/ Why: Claude Code writes one line per content block with the usage repeated; 5-minute and 1-hour cache writes are priced differently (1.25x vs 2x); cache reads are 0.1x and were 74.5% of my bill.
 
-3/ `npx billproof` — free, local, nothing uploaded. Paid receipt ($29 once) labels each turn: cache-expired, prefix-changed, one-hour-write, subagent, fast-mode, fallback. github.com/arthi-arumugam-git/billproof
+3/ `npx billproof` — free, local, nothing uploaded. Paid receipt ($49 once) labels each turn: cache-expired, prefix-changed, one-hour-write, subagent, fast-mode, fallback. github.com/arthi-arumugam-git/billproof
 
 ## Where NOT to post
 
