@@ -24,36 +24,38 @@ The name `billproof` was unclaimed on npm and PyPI when checked on 2026-09-02. I
 
 ---
 
-## 2. Create the Gumroad product (about 10 minutes)
+## 2. Create the Dodo Payments product (about 15 minutes)
 
-Gumroad is the checkout because it takes cards and PayPal, it is the merchant of record so EU and UK VAT is handled for you, it pays out to an Indian bank account in INR, and it generates and emails a licence key on every sale with no server of ours involved. Its fee is 10% plus 50 cents per sale.
+Gumroad did not work. **Dodo Payments** is the replacement, and it is a better fit anyway: it is an Indian company, it is the merchant of record so EU and UK VAT is handled for you, and its own FAQ says *"You can onboard as an individual and start receiving international payments without any hassle"* — no registered business needed.
 
-1. Sign up at **gumroad.com** and complete the payout details (Indian bank account, INR).
-2. New product → **Digital product**.
-   - Name: `billproof receipt licence`
-   - Price: `$29`
-   - Description: use the "receipt" column from the landing page.
-3. In the product settings, turn **ON** the option called **Generate a unique licence key per sale**. This is the step the whole flow depends on.
-4. Publish, then copy two things from the product page:
-   - the **short URL**, which looks like `https://gumroad.com/l/xxxxx`
-   - the **product ID**. It is in the URL of the product's edit page, or under the licence-key settings.
-5. Give both to Claude. Two one-line changes then go in: the buy button's link on the landing page, and `BILLPROOF_GUMROAD_PRODUCT` baked into the published build so keys verify.
+Its licence-key endpoints are public and need no API key, which is why neither product needs a server. Verified live on 2026-09-02: `POST https://live.dodopayments.com/licenses/validate` with `{license_key}` answers `{"valid":false}` for an unknown key, and it works from a browser too.
 
-Until step 5 is done the buy button points at a placeholder link, so do not share the landing page publicly before then.
+1. Sign up at **dodopayments.com**, onboard as an **individual**, and add your Indian bank details.
+2. Go to **Entitlements** → **+** → choose **License Key**. Configure:
+   - **Activations limit**: `3` (one licence, a laptop, a desktop and a spare).
+   - **Duration**: leave blank for a one-time purchase that never expires.
+   - **Activation instructions**: `Run: npx billproof activate <key>`
+   - **Prefix**: `BILLPROOF-` — this matters. The validate endpoint takes only the key, so the prefix is what stops an unrelated Dodo key from unlocking this tool. The code already expects exactly this prefix.
+3. Create the product: `billproof receipt licence`, **$29**, one-time. Attach the entitlement from step 2.
+4. Publish, then send Claude the **checkout URL**. One line changes on the landing page and in the CLI.
 
-### Testing the loop end to end
+Nothing else is needed — no product ID in the code, because Dodo validates by key alone and the prefix does the scoping.
 
-Gumroad lets you buy your own product. Do it once at $29 (you get the money back minus the fee, and it proves the machine works):
+### Test the whole loop once
+
+Buy your own product at $29 (you get it back minus the fee, and it proves the machine works end to end):
 
 ```
-billproof activate <the key from the email>
-billproof license
-billproof receipt --last
+npx billproof activate <the key from the email>
+npx billproof license
+npx billproof receipt --last
 ```
 
-If those three commands work, a stranger anywhere in the world can now buy at 3am and be running the paid tool a minute later, with no involvement from you.
+If those three work, a stranger anywhere can buy at 3am and be running the paid tool a minute later with no involvement from you.
 
----
+### If Dodo also fails
+
+The code already accepts **Polar** keys as well; its endpoint is verified live too. Polar takes 5% + 50c against Dodo's 4% + 40c, and it onboards Indian individuals through Stripe Connect Express. Set `BILLPROOF_POLAR_ORG` and it works. Failing both, `node scripts/issue-key.mjs <email>` issues a signed offline key by hand and you invoice however you like.
 
 ## 3. Post the launch threads (about 30 minutes, do this AFTER 1 and 2)
 

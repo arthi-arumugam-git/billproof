@@ -16,7 +16,7 @@ Usage
   billproof [scan] [--dir <path>] [--since 7d|30d|YYYY-MM-DD] [--by day|model|project|skill|mcp|agent|session] [--json] [--no-cache]
   billproof receipt <session-id|--last|--today> [--all] [--json] [--html <file>]
   billproof sessions [--since ...]            list sessions with cost, newest first
-  billproof activate <license-key>            unlock receipt
+  billproof activate <license-key>            unlock receipt on this machine
   billproof license                           show license status
 
 Reads Claude Code transcripts from ~/.claude/projects (or CLAUDE_CONFIG_DIR). Nothing leaves your machine

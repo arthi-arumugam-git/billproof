@@ -1,16 +1,35 @@
 import { createPublicKey, verify as cryptoVerify } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 
 /**
- * Three kinds of key are accepted, tried in this order:
- *  - offline keys `bp1_<payload>.<signature>` signed with the project's Ed25519 key (issued by hand),
- *  - Gumroad license keys (UUID-shaped), validated against Gumroad's public verify endpoint, and
- *  - Polar license keys, validated against Polar's customer-portal endpoint.
- * Once validated, the key is stored locally and re-checked weekly with a 30-day offline grace.
- * This is a courtesy gate for an open-source tool, not DRM.
+ * Licence keys, from whichever rail sold them.
+ *
+ *  - Dodo Payments (the rail in use): keys are issued and emailed on payment, revoked automatically
+ *    on refund or cancellation, and carry a server-enforced activation limit so one licence cannot
+ *    be shared across unlimited machines.
+ *  - offline keys `bp1_<payload>.<signature>` signed with the project's Ed25519 key, issued by hand.
+ *  - Gumroad and Polar remain supported so keys sold through them keep working.
+ *
+ * Once validated, the key is stored locally and re-checked weekly, with a 30-day grace when the
+ * network is unavailable. This is a courtesy gate on an open-source tool, not DRM.
  */
+
+/**
+ * Dodo Payments. Its activate, deactivate and validate endpoints are public: the docs say
+ * "The activate, deactivate, and validate license endpoints are public and do not require an API
+ * key. Call them directly from your client applications without exposing your API credentials."
+ * Verified 2026-09-02: POST https://live.dodopayments.com/licenses/validate with {license_key}
+ * answers {"valid":false} for an unknown key.
+ */
+const DODO_HOST = process.env.BILLPROOF_DODO_HOST ?? "https://live.dodopayments.com";
+/**
+ * Dodo's validate endpoint takes only the key, so a key from any Dodo merchant would validate.
+ * Giving the product a licence-key prefix in the Dodo dashboard and checking it here keeps a
+ * stranger's unrelated key from unlocking this tool. Empty means "accept any shape".
+ */
+export const DODO_KEY_PREFIX = process.env.BILLPROOF_DODO_PREFIX ?? "BILLPROOF-";
 
 export const POLAR_ORG_ID = process.env.BILLPROOF_POLAR_ORG ?? "";
 const POLAR_VALIDATE = "https://api.polar.sh/v1/customer-portal/license-keys/validate";
@@ -37,10 +56,12 @@ const GRACE_MS = 30 * 86_400_000;
 
 export interface StoredLicense {
   key: string;
-  source: "polar" | "gumroad" | "signed" | "env";
+  source: "dodo" | "polar" | "gumroad" | "signed" | "env";
   validatedAt: string;
   expiresAt?: string;
   customer?: string;
+  /** Dodo returns an activation instance; keeping its id lets a machine be released later. */
+  instanceId?: string;
 }
 
 export function licensePath(): string {
@@ -79,6 +100,81 @@ export function verifyOffline(key: string): { ok: true; payload: OfflinePayload 
   }
   if (payload.exp && Date.parse(payload.exp) < Date.now()) return { ok: false, reason: `expired ${payload.exp}` };
   return { ok: true, payload };
+}
+
+interface DodoValidateResponse {
+  valid?: boolean;
+  message?: string;
+}
+
+interface DodoActivateResponse {
+  id?: string;
+  license_key_instance_id?: string;
+  name?: string;
+  message?: string;
+}
+
+export function looksLikeDodoKey(key: string): boolean {
+  const k = String(key ?? "").trim();
+  if (k.length < 8) return false;
+  return DODO_KEY_PREFIX ? k.toUpperCase().startsWith(DODO_KEY_PREFIX.toUpperCase()) : true;
+}
+
+async function dodoPost(path: string, body: unknown, fetchImpl: typeof fetch): Promise<{ ok: true; data: unknown } | { ok: false; reason: string; network?: boolean }> {
+  let res: Response;
+  try {
+    res = await fetchImpl(`${DODO_HOST}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    return { ok: false, reason: `network: ${e instanceof Error ? e.message : String(e)}`, network: true };
+  }
+  let data: unknown;
+  try {
+    data = await res.json();
+  } catch {
+    return { ok: false, reason: `Dodo returned ${res.status} with no JSON`, network: res.status >= 500 };
+  }
+  if (res.status >= 500) return { ok: false, reason: `Dodo returned ${res.status}`, network: true };
+  return { ok: true, data };
+}
+
+/** Check a key is currently valid. Dodo revokes on refund, dispute and subscription end. */
+export async function validateDodo(
+  key: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ ok: true } | { ok: false; reason: string; network?: boolean }> {
+  const r = await dodoPost("/licenses/validate", { license_key: String(key).trim() }, fetchImpl);
+  if (!r.ok) return r;
+  const data = r.data as DodoValidateResponse;
+  if (data.valid === true) return { ok: true };
+  return { ok: false, reason: data.message ?? "this licence key is not valid or is no longer active" };
+}
+
+/**
+ * Claim one of the key's activation slots for this machine. Dodo enforces the limit, so a licence
+ * bought for one machine cannot silently unlock ten.
+ */
+export async function activateDodo(
+  key: string,
+  deviceName: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ ok: true; instanceId?: string } | { ok: false; reason: string; network?: boolean }> {
+  const r = await dodoPost("/licenses/activate", { license_key: String(key).trim(), name: deviceName }, fetchImpl);
+  if (!r.ok) return r;
+  const data = r.data as DodoActivateResponse;
+  const instanceId = data.id ?? data.license_key_instance_id;
+  if (instanceId) return { ok: true, instanceId };
+  // some failures come back 200 with a message and no instance
+  return { ok: false, reason: data.message ?? "Dodo did not return an activation; the activation limit may be reached" };
+}
+
+/** Release this machine's activation slot so the licence can be moved to another. */
+export async function deactivateDodo(key: string, instanceId: string, fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  const r = await dodoPost("/licenses/deactivate", { license_key: String(key).trim(), license_key_instance_id: instanceId }, fetchImpl);
+  return r.ok;
 }
 
 interface GumroadResponse {
@@ -182,6 +278,19 @@ export async function activate(key: string): Promise<{ ok: true } | { ok: false;
     await store({ key, source: "signed", validatedAt: new Date().toISOString(), expiresAt: v.payload.exp, customer: v.payload.sub });
     return { ok: true };
   }
+  if (looksLikeDodoKey(key)) {
+    const v = await validateDodo(key);
+    if (v.ok) {
+      const device = `${hostname()} (${process.platform})`;
+      const a = await activateDodo(key, device);
+      // an activation-limit failure is not a reason to refuse a valid licence; the key still works,
+      // this machine simply does not hold a slot, and validate keeps answering
+      await store({ key, source: "dodo", validatedAt: new Date().toISOString(), instanceId: a.ok ? a.instanceId : undefined });
+      return { ok: true };
+    }
+    if (!v.network) return { ok: false, reason: v.reason };
+  }
+
   if (looksLikeGumroadKey(key)) {
     const g = await validateGumroad(key);
     if (g.ok) {
@@ -217,6 +326,16 @@ export async function checkLicense(): Promise<LicenseStatus> {
 
   const age = Date.now() - Date.parse(lic.validatedAt);
   if (age < REVALIDATE_MS) return { ok: true, source: lic.source, expiresAt: lic.expiresAt };
+
+  if (lic.source === "dodo" || (lic.source === "env" && looksLikeDodoKey(lic.key))) {
+    const v = await validateDodo(lic.key);
+    if (v.ok) {
+      if (lic.source !== "env") await store({ ...lic, validatedAt: new Date().toISOString() });
+      return { ok: true, source: lic.source };
+    }
+    if (v.network && age < GRACE_MS) return { ok: true, source: lic.source, reason: "offline; within grace" };
+    return { ok: false, reason: v.reason };
+  }
 
   if (lic.source === "gumroad" || (lic.source === "env" && looksLikeGumroadKey(lic.key))) {
     const g = await validateGumroad(lic.key);

@@ -101,3 +101,65 @@ describe("offline signed keys", () => {
     expect(verifyOffline("bp1_").ok).toBe(false);
   });
 });
+
+describe("Dodo Payments keys", () => {
+  const jsonOk = (body: unknown, status = 200): Response =>
+    ({ status, ok: status < 400, json: async () => body }) as unknown as Response;
+
+  it("recognises keys by the product's licence-key prefix", async () => {
+    const { looksLikeDodoKey } = await import("../src/license.js?dodoshape");
+    expect(looksLikeDodoKey("BILLPROOF-AAAA-BBBB-CCCC")).toBe(true);
+    expect(looksLikeDodoKey("billproof-aaaa-bbbb-cccc")).toBe(true); // case is not the customer's problem
+    expect(looksLikeDodoKey("  BILLPROOF-AAAA-BBBB  ")).toBe(true);
+    expect(looksLikeDodoKey("SOMEONE-ELSES-KEY-1234")).toBe(false);
+    expect(looksLikeDodoKey("short")).toBe(false);
+  });
+
+  it("accepts a valid key and reports Dodo's own message when it is not", async () => {
+    const { validateDodo } = await import("../src/license.js?dodoval");
+    await expect(validateDodo("K", async () => jsonOk({ valid: true }))).resolves.toEqual({ ok: true });
+    // this is the exact body the live endpoint returned on 2026-09-02 for an unknown key
+    const bad = await validateDodo("K", async () => jsonOk({ valid: false }));
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.reason).toMatch(/not valid|no longer active/);
+  });
+
+  it("sends the key to the validate endpoint and nothing else", async () => {
+    const { validateDodo } = await import("../src/license.js?dodobody");
+    let seen: { url?: string; body?: unknown } = {};
+    await validateDodo("MY-KEY", async (url, init) => {
+      seen = { url: String(url), body: JSON.parse(String((init as RequestInit).body)) };
+      return jsonOk({ valid: true });
+    });
+    expect(seen.url).toContain("/licenses/validate");
+    expect(seen.body).toEqual({ license_key: "MY-KEY" });
+  });
+
+  it("treats a 5xx as retryable so the offline grace applies, but a 4xx as final", async () => {
+    const { validateDodo } = await import("../src/license.js?dodo5xx");
+    const down = await validateDodo("K", async () => jsonOk({}, 503));
+    expect(down.ok).toBe(false);
+    if (!down.ok) expect(down.network).toBe(true);
+    const thrown = await validateDodo("K", async () => {
+      throw new Error("ENOTFOUND live.dodopayments.com");
+    });
+    if (!thrown.ok) expect(thrown.network).toBe(true);
+  });
+
+  it("claims an activation slot and keeps the instance id so the machine can be released", async () => {
+    const { activateDodo, deactivateDodo } = await import("../src/license.js?dodoact");
+    const a = await activateDodo("K", "laptop", async (_u, init) => {
+      expect(JSON.parse(String((init as RequestInit).body))).toEqual({ license_key: "K", name: "laptop" });
+      return jsonOk({ id: "inst_123" });
+    });
+    expect(a).toEqual({ ok: true, instanceId: "inst_123" });
+    await expect(deactivateDodo("K", "inst_123", async () => jsonOk({}))).resolves.toBe(true);
+  });
+
+  it("reports an activation-limit refusal rather than pretending it worked", async () => {
+    const { activateDodo } = await import("../src/license.js?dodolimit");
+    const r = await activateDodo("K", "laptop", async () => jsonOk({ message: "activation limit reached" }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/activation limit/);
+  });
+});
