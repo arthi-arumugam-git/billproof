@@ -78,7 +78,6 @@ https://vercel.com/teams/arthi-arumugam/settings/billing
 
 ## Optional, later
 
-- **Polar.sh** as a second checkout. Its fee is lower than Gumroad's at 5% plus 50 cents and it is also a merchant of record. The code already accepts Polar keys; it only needs `BILLPROOF_POLAR_ORG` set. Worth doing once sales exist, not before.
 - **A domain.** `billproof.dev` or similar, pointed at GitHub Pages. Cosmetic until there is traffic.
 - **Hand-issued keys** for anyone you want to give a licence to (a maintainer, a reviewer, a friend):
   ```
