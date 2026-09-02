@@ -140,6 +140,21 @@ footer{font-family:var(--mono);font-size:.78rem;color:var(--dim);margin-top:64px
   </ol>
 </section>
 
+<section id="compare" class="prose">
+  <h2>billproof and ccusage</h2>
+  <p>ccusage is the free CLI most people reach for, and it prices Claude Code sessions correctly: its source, read on 2 September 2026, applies the 2x rate to one-hour cache writes and de-duplicates transcript lines by request id. billproof exists for the questions that come after the total.</p>
+  <table>
+    <thead><tr><th>question</th><th>ccusage</th><th>billproof</th></tr></thead>
+    <tbody>
+      <tr><td>What did my sessions cost, with both cache-write tiers and cache reads priced?</td><td>yes; free; Claude Code, Codex, Gemini CLI and a dozen other agents</td><td>yes; free scan; Claude Code, Codex and Gemini CLI</td></tr>
+      <tr><td>Which turn cost the money, and why?</td><td>totals by day, session, model and billing block</td><td>a receipt: every turn as a line item with a root cause (cache expired, one-hour writes, model switch, prefix changed, fast mode, server-side fallback)</td></tr>
+      <tr><td>How far off would a naive counter have been?</td><td>not shown</td><td>four naive methods and each one's error, measured on your own transcripts</td></tr>
+      <tr><td>Does the Anthropic invoice match our own records?</td><td>not a feature</td><td>reconcile: the organisation's usage and cost reports against local records, day by day and model by model, every difference labelled by cause</td></tr>
+      <tr><td>Price</td><td>free</td><td>scan free; receipt $49 once; reconcile $199 once per organisation</td></tr>
+    </tbody>
+  </table>
+</section>
+
 <section id="receipt" class="prose">
   <h2>The receipt: which turns cost the money, and why</h2>
   <p>The free scan tells you the true number. The receipt tells you what caused it, turn by turn, with the dollars each cause explains and the evidence fields that fired the rule.</p>
