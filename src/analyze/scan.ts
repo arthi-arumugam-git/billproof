@@ -33,6 +33,8 @@ export interface ScanResult {
   flags: Record<string, number>;
   unknownModels: string[];
   tokens: { input: number; write5m: number; write1h: number; read: number; output: number };
+  /** context written by the first main-lane request of a session that started cold (no cache read): system prompt, tools, skills, memory */
+  startupContext: { sessions: number; avgTokens: number; maxTokens: number; maxSession: string };
 }
 
 function projectName(cwd?: string): string {
@@ -123,6 +125,28 @@ export function scan(turns: Turn[], by: GroupBy = "day"): ScanResult {
     { method: "cache-blind", what: "input + output only; cache tokens ignored", total: cacheBlind, errorPct: pct(cacheBlind) },
   ];
 
+  const firstBySession = new Map<string, Turn>();
+  for (const t of turns) {
+    if (t.sidechain || t.agentId) continue;
+    const f = firstBySession.get(t.sessionId);
+    if (!f || t.ts < f.ts) firstBySession.set(t.sessionId, t);
+  }
+  let startSum = 0;
+  let startMax = 0;
+  let startMaxSession = "";
+  let startN = 0;
+  for (const [sid, t] of firstBySession) {
+    // a resumed session reads its old cache on the first turn; only cold starts tell you what a fresh session costs
+    if (t.usage.cache_read_input_tokens > 0) continue;
+    const ctx = t.usage.input_tokens + t.usage.cache_creation_input_tokens;
+    startSum += ctx;
+    startN += 1;
+    if (ctx > startMax) {
+      startMax = ctx;
+      startMaxSession = sid;
+    }
+  }
+
   const byTotal = (a: GroupRow, b: GroupRow) => b.total - a.total;
   const rows = [...groups.values()];
   rows.sort(by === "day" ? (a, b) => a.key.localeCompare(b.key) : byTotal);
@@ -139,6 +163,12 @@ export function scan(turns: Turn[], by: GroupBy = "day"): ScanResult {
     naive: naiveRows,
     flags,
     unknownModels: [...unknown],
+    startupContext: {
+      sessions: startN,
+      avgTokens: startN ? Math.round(startSum / startN) : 0,
+      maxTokens: startMax,
+      maxSession: startMaxSession,
+    },
     tokens: {
       input: total.inputTokens,
       write5m: turns.reduce((a, t) => a + (t.usage.cache_creation?.ephemeral_5m_input_tokens ?? 0), 0),

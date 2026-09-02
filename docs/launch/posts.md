@@ -62,3 +62,29 @@ Same as r/ClaudeAI, title: "billproof: which turn ate your usage window, and why
 ## Where NOT to post
 
 No cold DMs, no template replies in other people's threads. Arthi's own measurement across ~110 sends: template openers produce zero replies. Replying with a real number to a real question is the only outreach that has ever worked for her, and that stays manual.
+
+## Reddit replies, where the demand already is (found 2026-09-02 via Apify; scores as of that day)
+
+Rule: reply only with a real number from your own machine, once per thread, no link in the first sentence. If the thread is older than two weeks, skip it; comment on the next one like it instead.
+
+### r/ClaudeAI, 92 pts / 78 comments, "Claude Code hitting the 5-hour usage limit much faster than usual, is something changing?"
+https://www.reddit.com/r/ClaudeAI/comments/1vp5cqt/claude_code_hitting_the_5hour_usage_limit_much/
+OP removed plugins and skills to find the drain and still could not tell. Top comment (38 pts): "One day it takes hours to fill up the 5 hour limit and on other days it takes minutes."
+
+> The transcripts in ~/.claude/projects record the exact usage object for every request, so you can see which turn did it rather than guessing. I priced 48k of my own requests: 74.5% of the cost-equivalent was cache reads, and the turns that spike are almost always one of three things: an idle gap longer than the cache TTL (the whole context gets re-written at 2x instead of read at 0.1x), a prompt prefix that changed inside the TTL (compaction, an edited CLAUDE.md, a changed tool list), or a subagent on its own cache lane. On my machine the biggest single turn was 783k tokens re-written after a 1h idle.
+>
+> I wrote a small local tool for this: `npx billproof` gives cost by skill / MCP server / subagent (free, nothing uploaded); the paid receipt labels each turn with the cause. Happy to read a session of yours if you paste the `--json` output.
+
+### r/ClaudeAI, 158 pts / 42 comments, "How I got my Mac to read my Claude Code chats at night and extend my token usage by 1/3rd"
+https://www.reddit.com/r/ClaudeAI/comments/1w06a7b/how_i_got_my_mac_to_read_my_claude_code_chats_at/
+OP did the analysis by hand ("About a third of my usage was re-reads"). Top comment (21 pts): "Compact writes the summary with the paid model, mid-chat, after the bloat already billed you on every message before it."
+
+> The re-read share is measurable straight from the JSONL: it is cache_read_input_tokens on each turn, priced at 0.1x base, and compaction shows up as a turn where cache_creation jumps and cache_read drops to ~0 within the TTL. Across 41 sessions here, reads were 74.5% of cost-equivalent and 1-hour cache writes another 11.6%. I automated exactly the count you did by hand (`npx billproof`, local only); the receipt version labels the compaction turns as prefix-changed so you can see what each one cost.
+
+### r/ClaudeCode, 79 pts / 49 comments, "My fresh Claude Code sessions were starting at ~35K tokens. I got them down to ~13K."
+https://www.reddit.com/r/ClaudeCode/comments/1vklbtg/my_fresh_claude_code_sessions_were_starting_at/
+
+> Same measurement from the other side: the first request of a cold session has input + cache_creation equal to whatever /context all shows, and it is written to the cache at 1.25x or 2x base. billproof prints the average across your sessions ("Session start context") so you can see whether a cleanup like yours actually stuck.
+
+### Skip
+r/ClaudeAI 341 pts "Max 20x usage went from 0% to 100% in half an hour while I was not using Claude": that thread is about phantom usage and account security, not accounting. The only honest contribution would be "billproof can show that no request left this machine in that window", and that is a stretch. Leave it.

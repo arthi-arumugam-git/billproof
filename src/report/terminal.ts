@@ -23,6 +23,8 @@ export const tok = (n: number): string => {
   return n.toLocaleString("en-US");
 };
 const pct = (x: number): string => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
+/** share of a whole, for people whose unit is "how much of my window", not dollars */
+const share = (part: number, whole: number): string => (whole > 0 ? `${((part / whole) * 100).toFixed(1)}%` : "-");
 const date = (ms: number): string => (ms ? new Date(ms).toISOString().slice(0, 10) : "-");
 const time = (ms: number): string => (ms ? new Date(ms).toISOString().slice(11, 16) : "-");
 
@@ -65,15 +67,20 @@ export function renderScan(s: ScanResult, by: string, dir: string): string {
   out.push(c.bold(`By ${by}`));
   out.push(
     table(
-      [by, "requests", "cost", "1h writes", "reads"],
-      s.groups.slice(0, 40).map((g) => [g.key.length > 48 ? g.key.slice(0, 45) + "..." : g.key, num(g.turns), usd(g.total), usd(g.write1h), usd(g.read)]),
-      ["l", "r", "r", "r", "r"],
+      [by, "requests", "cost", "share", "1h writes", "reads"],
+      s.groups.slice(0, 40).map((g) => [g.key.length > 48 ? g.key.slice(0, 45) + "..." : g.key, num(g.turns), usd(g.total), share(g.total, s.total.total), usd(g.write1h), usd(g.read)]),
+      ["l", "r", "r", "r", "r", "r"],
     ),
   );
   if (s.groups.length > 40) out.push(c.dim(`... ${s.groups.length - 40} more`));
   out.push("");
   out.push(c.bold(`Most expensive sessions`));
-  out.push(table(["session", "requests", "cost"], s.topSessions.map((g) => [g.key, num(g.turns), usd(g.total)]), ["l", "r", "r"]));
+  out.push(table(["session", "requests", "cost", "share"], s.topSessions.map((g) => [g.key, num(g.turns), usd(g.total), share(g.total, s.total.total)]), ["l", "r", "r", "r"]));
+  if (s.startupContext.sessions) {
+    out.push("");
+    out.push(c.bold(`Session start context`) + c.dim(`  what a cold session writes before you type: system prompt, tools, skills, memory`));
+    out.push(`average ${tok(s.startupContext.avgTokens)} tokens across ${num(s.startupContext.sessions)} cold starts; largest ${tok(s.startupContext.maxTokens)} (${s.startupContext.maxSession.slice(0, 8)}). Trim with /context all.`);
+  }
   const flagKeys = Object.keys(s.flags);
   if (flagKeys.length) {
     out.push("");
@@ -96,9 +103,9 @@ export function renderReceipt(r: Receipt, opts: { all?: boolean } = {}): string 
   out.push(c.bold(`Where the money went`));
   out.push(
     table(
-      ["cause", "turns", "attributed", "meaning"],
-      r.byCause.map((b) => [b.cause, String(b.turns), usd(b.attributed), CAUSE_TEXT[b.cause] ?? ""]),
-      ["l", "r", "r", "l"],
+      ["cause", "turns", "attributed", "share", "meaning"],
+      r.byCause.map((b) => [b.cause, String(b.turns), usd(b.attributed), share(b.attributed, r.total), CAUSE_TEXT[b.cause] ?? ""]),
+      ["l", "r", "r", "r", "l"],
     ),
   );
   out.push("");
@@ -106,7 +113,7 @@ export function renderReceipt(r: Receipt, opts: { all?: boolean } = {}): string 
   out.push(c.bold(opts.all ? `Every turn` : `Ten most expensive turns`));
   out.push(
     table(
-      ["#", "time", "gap", "model", "in", "w5m", "w1h", "read", "out", "cost", "causes"],
+      ["#", "time", "gap", "model", "in", "w5m", "w1h", "read", "out", "cost", "share", "causes"],
       items.map((it) => [
         String(it.index + 1),
         time(it.turn.ts),
@@ -118,9 +125,10 @@ export function renderReceipt(r: Receipt, opts: { all?: boolean } = {}): string 
         tok(it.turn.usage.cache_read_input_tokens),
         tok(it.turn.usage.output_tokens),
         usd(it.cost.total),
+        share(it.cost.total, r.total),
         it.findings.filter((f) => f.attributed > 0).map((f) => f.cause).join(","),
       ]),
-      ["r", "l", "r", "l", "r", "r", "r", "r", "r", "r", "l"],
+      ["r", "l", "r", "l", "r", "r", "r", "r", "r", "r", "r", "l"],
     ),
   );
   out.push("");
