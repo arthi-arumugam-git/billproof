@@ -122,7 +122,7 @@ async function main(): Promise<number> {
     if (!lic.ok) {
       const s = scan(turns, "session");
       console.log(renderScan(s, "session", dir));
-      console.log(`\nreceipt is the paid part of billproof. Get a key at https://billproof.vercel.app then run: billproof activate <key>`);
+      console.log(`\nreceipt is the paid part of billproof. Get a key at https://arthi-arumugam-git.github.io/billproof then run: billproof activate <key>`);
       return 3;
     }
     let sessionId = positional[0];

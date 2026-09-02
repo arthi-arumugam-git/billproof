@@ -61,7 +61,7 @@ Every turn of a session as a line item with a root cause and the dollars it expl
 
 `--html receipt.html` writes a self-contained report you can share. `--all` lists every turn. `--json` for machines.
 
-Get a key at https://billproof.vercel.app, then `billproof activate <key>`. Keys are validated once and cached locally; the source is open, the gate is a courtesy.
+Get a key at https://arthi-arumugam-git.github.io/billproof, then `billproof activate <key>`. Keys are validated once and cached locally; the source is open, the gate is a courtesy.
 
 ## On subscription plans
 
