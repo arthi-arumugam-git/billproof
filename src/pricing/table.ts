@@ -17,6 +17,7 @@
 export interface PriceRow {
   /** canonical family id used in reports */
   model: string;
+  provider: "anthropic" | "openai" | "gemini";
   /** matches model ids including dated snapshots and Bedrock/Vertex spellings */
   match: RegExp;
   /** ISO date from which this row applies; earlier turns fall through to older rows if any */
@@ -42,6 +43,7 @@ const R = (
   opts: Partial<PriceRow> = {},
 ): PriceRow => ({
   model,
+  provider: "anthropic",
   match,
   effectiveFrom: "2025-01-01",
   input,
@@ -52,6 +54,38 @@ const R = (
   verified: true,
   ...opts,
 });
+
+/** OpenAI: cached input is a discount on input; writes are free except on 5.6 where they cost 1.25x. */
+const O = (model: string, match: RegExp, input: number, output: number, opts: Partial<PriceRow> = {}): PriceRow => ({
+  model,
+  provider: "openai",
+  match,
+  effectiveFrom: "2025-01-01",
+  input,
+  output,
+  cacheReadMult: 0.1,
+  write5mMult: 1,
+  write1hMult: 1,
+  verified: true,
+  ...opts,
+});
+
+const G = (model: string, match: RegExp, input: number, output: number, opts: Partial<PriceRow> = {}): PriceRow => ({
+  model,
+  provider: "gemini",
+  match,
+  effectiveFrom: "2025-01-01",
+  input,
+  output,
+  cacheReadMult: 0.1,
+  write5mMult: 1,
+  write1hMult: 1,
+  verified: true,
+  ...opts,
+});
+
+/** OpenAI long-context tier, from the gpt-5.4 model page: ">272K input tokens ... 2x input and 1.5x output". */
+const LC_OPENAI = { threshold: 272_000, inputMult: 2, outputMult: 1.5 };
 
 /** Ordered most-specific first. First regex match wins. */
 export const PRICE_TABLE: PriceRow[] = [
@@ -84,6 +118,55 @@ export const PRICE_TABLE: PriceRow[] = [
   R("claude-3-5-sonnet", /3-5-sonnet/, 3, 15, { verified: false }),
   R("claude-3-opus", /3-opus/, 15, 75, { verified: false }),
   R("claude-3-haiku", /3-haiku/, 0.25, 1.25, { verified: false }),
+
+  // ---- OpenAI, standard tier, USD per 1M tokens ----
+  // Source: https://developers.openai.com/api/docs/pricing rendered 2026-09-02 (raw table saved in the
+  // money-scout research folder). cacheReadMult is cached-input price / input price. Cache writes are
+  // charged only on the 5.6 family; Codex logs do not report writes, so the multiplier is informational.
+  // Long context: the gpt-5.4 model page states "prompts with >272K input tokens are priced at 2x input and
+  // 1.5x output for the full session", which matches the table's long-context columns.
+  O("gpt-5.6-sol", /gpt-5\.6-sol/, 4, 20, { cacheReadMult: 0.1, write5mMult: 1.25, longContext: LC_OPENAI }),
+  O("gpt-5.6-terra", /gpt-5\.6-terra/, 2, 12, { cacheReadMult: 0.1, write5mMult: 1.25, longContext: LC_OPENAI }),
+  O("gpt-5.6-luna", /gpt-5\.6-luna/, 0.2, 1.2, { cacheReadMult: 0.1, write5mMult: 1.25, longContext: LC_OPENAI }),
+  O("gpt-5.6-cyber", /gpt-5\.6-cyber/, 12.5, 75, { cacheReadMult: 0.1, write5mMult: 1.25 }),
+  O("gpt-5.5-pro", /gpt-5\.5-pro/, 30, 180, { cacheReadMult: 1, longContext: LC_OPENAI }),
+  O("gpt-5.5", /gpt-5\.5(?![-.]\w)/, 5, 30, { cacheReadMult: 0.1, longContext: LC_OPENAI }),
+  O("gpt-5.4-pro", /gpt-5\.4-pro/, 30, 180, { cacheReadMult: 1, longContext: LC_OPENAI }),
+  O("gpt-5.4-mini", /gpt-5\.4-mini/, 0.75, 4.5, { cacheReadMult: 0.1 }),
+  O("gpt-5.4-nano", /gpt-5\.4-nano/, 0.2, 1.25, { cacheReadMult: 0.1 }),
+  O("gpt-5.4", /gpt-5\.4(?![-.]\w)/, 2.5, 15, { cacheReadMult: 0.1, longContext: LC_OPENAI }),
+  O("gpt-5.3-codex", /gpt-5\.3-codex/, 1.75, 14, { cacheReadMult: 0.1 }),
+  // gpt-5.2-codex is no longer on the page; priced at gpt-5.2's rate and flagged, never silently
+  O("gpt-5.2-codex", /gpt-5\.2-codex/, 1.75, 14, { cacheReadMult: 0.1, verified: false }),
+  O("gpt-5.2-pro", /gpt-5\.2-pro/, 21, 168, { cacheReadMult: 1 }),
+  O("gpt-5.2", /gpt-5\.2(?![-.]\w)/, 1.75, 14, { cacheReadMult: 0.1 }),
+  O("gpt-5.1-codex", /gpt-5\.1-codex/, 1.25, 10, { cacheReadMult: 0.1, verified: false }),
+  O("gpt-5.1", /gpt-5\.1(?![-.]\w)/, 1.25, 10, { cacheReadMult: 0.1 }),
+  O("gpt-5-codex", /gpt-5-codex/, 1.25, 10, { cacheReadMult: 0.1, verified: false }),
+  O("gpt-5-pro", /gpt-5-pro/, 15, 120, { cacheReadMult: 1 }),
+  O("gpt-5-mini", /gpt-5-mini/, 0.25, 2, { cacheReadMult: 0.1 }),
+  O("gpt-5-nano", /gpt-5-nano/, 0.05, 0.4, { cacheReadMult: 0.1 }),
+  O("gpt-5", /gpt-5(?![-.]\w)/, 1.25, 10, { cacheReadMult: 0.1 }),
+  O("gpt-4.1-mini", /gpt-4\.1-mini/, 0.4, 1.6, { cacheReadMult: 0.25 }),
+  O("gpt-4.1-nano", /gpt-4\.1-nano/, 0.1, 0.4, { cacheReadMult: 0.25 }),
+  O("gpt-4.1", /gpt-4\.1(?![-.]\w)/, 2, 8, { cacheReadMult: 0.25 }),
+  O("gpt-4o-mini", /gpt-4o-mini/, 0.15, 0.6, { cacheReadMult: 0.5 }),
+  O("gpt-4o", /gpt-4o(?![-.]\w)/, 2.5, 10, { cacheReadMult: 0.5 }),
+  O("o4-mini", /^o4-mini/, 1.1, 4.4, { cacheReadMult: 0.25 }),
+  O("o3-pro", /^o3-pro/, 20, 80, { cacheReadMult: 1 }),
+  O("o3-mini", /^o3-mini/, 1.1, 4.4, { cacheReadMult: 0.5 }),
+  O("o3", /^o3(?![-.]\w)/, 2, 8, { cacheReadMult: 0.25 }),
+  O("o1-pro", /^o1-pro/, 150, 600, { cacheReadMult: 1 }),
+  O("o1", /^o1(?![-.]\w)/, 15, 60, { cacheReadMult: 0.5 }),
+
+  // ---- Gemini Developer API, paid tier, USD per 1M tokens ----
+  // Source: https://ai.google.dev/gemini-api/docs/pricing rendered 2026-09-02. "Output price (including thinking
+  // tokens)", so thoughts are output. "Context caching price" is the cached-input rate. Gemini 3.1 Pro has a
+  // 200k tier: input $2 -> $4, output $12 -> $18, caching $0.20 -> $0.40.
+  G("gemini-3.1-pro", /gemini-3\.1-pro/, 2, 12, { cacheReadMult: 0.1, longContext: { threshold: 200_000, inputMult: 2, outputMult: 1.5 } }),
+  // gemini-3-pro-preview is not on the current page; priced at 3.1 Pro's rate and flagged
+  G("gemini-3-pro", /gemini-3-pro/, 2, 12, { cacheReadMult: 0.1, longContext: { threshold: 200_000, inputMult: 2, outputMult: 1.5 }, verified: false }),
+  G("gemini-3-flash", /gemini-3-flash/, 0.5, 3, { cacheReadMult: 0.1 }),
 ];
 
 /** Multiplier for inference_geo === "us" on Claude 4.6 and later (page: "Data residency pricing"). */

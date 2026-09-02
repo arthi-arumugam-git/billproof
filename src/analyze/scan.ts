@@ -1,7 +1,7 @@
 import { naive, priceTurn } from "../pricing/price.js";
 import type { CostBreakdown, Turn, TurnCost } from "../types.js";
 
-export type GroupBy = "day" | "model" | "project" | "skill" | "mcp" | "agent" | "session";
+export type GroupBy = "day" | "model" | "project" | "skill" | "mcp" | "agent" | "session" | "provider" | "source";
 
 export interface GroupRow extends CostBreakdown {
   key: string;
@@ -59,6 +59,10 @@ export function groupKey(turn: Turn, by: GroupBy): string {
       return turn.sidechain || turn.agentId ? `subagent${turn.agentId ? ":" + turn.agentId : ""}` : "main";
     case "session":
       return turn.sessionId;
+    case "provider":
+      return turn.provider;
+    case "source":
+      return turn.source;
   }
 }
 
@@ -121,7 +125,7 @@ export function scan(turns: Turn[], by: GroupBy = "day"): ScanResult {
   const naiveRows: NaiveDelta[] = [
     { method: "line-summed", what: "sums every transcript line; a message with thinking + text + tool_use counts three times", total: lineSummed, errorPct: pct(lineSummed) },
     { method: "all-writes-5m", what: "prices every cache write at 1.25x; ignores the 1-hour tier at 2x", total: n5m, errorPct: pct(n5m) },
-    { method: "cache-as-input", what: "prices cache reads and writes as ordinary input; no cache discount", total: cacheAsInput, errorPct: pct(cacheAsInput) },
+    { method: "cache-as-input", what: "prices cached tokens at the full input rate; for OpenAI and Gemini this is reading input_tokens without subtracting cached", total: cacheAsInput, errorPct: pct(cacheAsInput) },
     { method: "cache-blind", what: "input + output only; cache tokens ignored", total: cacheBlind, errorPct: pct(cacheBlind) },
   ];
 

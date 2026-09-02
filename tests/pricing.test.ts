@@ -36,7 +36,8 @@ describe("price table", () => {
     expect(lookupPrice("claude-opus-4-1-20250805")?.model).toBe("claude-opus-4-1");
     expect(lookupPrice("claude-opus-4-20250514")?.model).toBe("claude-opus-4");
     expect(lookupPrice("claude-sonnet-4-20250514")?.model).toBe("claude-sonnet-4");
-    expect(lookupPrice("gpt-5")).toBeUndefined();
+    expect(lookupPrice("gpt-5")?.provider).toBe("openai"); // OpenAI rows were added 2026-09-02
+    expect(lookupPrice("llama-4-maverick")).toBeUndefined();
   });
 
   it("Fable 5.1 cache reads are 0.025x, everyone else 0.1x (pricing page footnote 1)", () => {

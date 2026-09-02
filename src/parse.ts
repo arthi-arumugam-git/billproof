@@ -70,6 +70,8 @@ export function parseLine(raw: RawLine, file: string): Turn | null {
 
   return {
     id: m.id ?? raw.requestId ?? raw.uuid ?? `${file}:${ts}`,
+    provider: "anthropic",
+    source: "claude-code",
     requestId: raw.requestId,
     sessionId: raw.sessionId ?? "unknown",
     ts,

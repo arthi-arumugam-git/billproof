@@ -1,4 +1,16 @@
-/** Shapes read from Claude Code transcript lines. Only usage, ids, timestamps and attribution are kept; never content text. */
+/**
+ * Shapes read from agent transcripts. Only usage, ids, timestamps and attribution are kept; never content text.
+ *
+ * Every provider is normalised to one convention so the pricing engine has a single rule:
+ *   input_tokens            = uncached input (Anthropic reports it this way; OpenAI and Gemini report gross input,
+ *                             so the reader subtracts their cached count)
+ *   cache_read_input_tokens = tokens served from cache (Anthropic cache_read, OpenAI cached_input, Gemini cached)
+ *   cache_creation_*        = cache writes (Anthropic only; Codex and Gemini CLI logs do not report writes)
+ *   output_tokens           = all billed output, reasoning included
+ */
+
+export type Provider = "anthropic" | "openai" | "gemini";
+export type Source = "claude-code" | "codex" | "gemini-cli";
 
 export interface CacheCreation {
   ephemeral_5m_input_tokens?: number;
@@ -16,6 +28,10 @@ export interface Usage {
   inference_geo?: string;
   server_tool_use?: { web_search_requests?: number; web_fetch_requests?: number };
   iterations?: Iteration[];
+  /** OpenAI reasoning tokens and Gemini "thoughts"; already inside output_tokens, kept for attribution */
+  reasoning_output_tokens?: number;
+  /** what the provider itself reported as gross input, before normalisation, so the naive panel can show it */
+  gross_input_tokens?: number;
 }
 
 /** One billed pass of a request. With server-side fallbacks a request can carry several, each at its own model. */
@@ -32,6 +48,8 @@ export interface Iteration {
 export interface Turn {
   /** message.id when present, else requestId, else the line uuid */
   id: string;
+  provider: Provider;
+  source: Source;
   requestId?: string;
   sessionId: string;
   /** epoch milliseconds */

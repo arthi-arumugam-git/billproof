@@ -4,7 +4,8 @@ import { dirname, join } from "node:path";
 import type { ReadStats } from "./discover.js";
 import { readLinesFrom } from "./lines.js";
 import { parseLine, type RawLine } from "./parse.js";
-import type { Turn } from "./types.js";
+import { parseWholeFile } from "./sources.js";
+import type { Source, Turn } from "./types.js";
 
 /**
  * Per-file cache of parsed turns. Transcripts are append-only JSONL and total gigabytes; parsed
@@ -13,7 +14,7 @@ import type { Turn } from "./types.js";
  * The cache stores only what Turn holds (usage, ids, timestamps, attribution), never content.
  */
 
-const VERSION = 2;
+const VERSION = 3;
 
 interface Entry {
   /** bytes of complete lines consumed */
@@ -76,6 +77,56 @@ async function readFileFrom(file: string, start: number, stats: CachedReadStats)
   return { turns, bytes: consumed.bytes };
 }
 
+/**
+ * Codex and Gemini sessions are small and their parsers need the whole file, so they are cached
+ * per file on (mtime, size) and re-read completely when either changes.
+ */
+export async function readWholeFilesCached(
+  source: Source,
+  files: string[],
+  stats: CachedReadStats,
+  opts: { useCache: boolean } = { useCache: true },
+): Promise<Turn[]> {
+  const cache = opts.useCache ? await loadCache() : { version: VERSION, files: {} };
+  const out: Turn[] = [];
+  let dirty = false;
+  for (const f of files) {
+    let s;
+    try {
+      s = await stat(f);
+    } catch {
+      continue;
+    }
+    stats.files += 1;
+    const e = cache.files[f];
+    if (e && e.bytes === s.size && e.mtimeMs === s.mtimeMs) {
+      stats.cachedFiles += 1;
+      for (const t of e.turns) out.push({ ...t, file: f });
+      continue;
+    }
+    let turns: Turn[] = [];
+    try {
+      turns = await parseWholeFile(source, f);
+    } catch {
+      stats.badLines += 1;
+    }
+    stats.bytesRead += s.size;
+    for (const t of turns) out.push(t);
+    if (opts.useCache) {
+      cache.files[f] = { bytes: s.size, mtimeMs: s.mtimeMs, turns: turns.map(({ file: _f, ...rest }) => rest) };
+      dirty = true;
+    }
+  }
+  if (opts.useCache && dirty) {
+    try {
+      await saveCache(cache);
+    } catch {
+      /* the cache is an optimisation; never fail a run for it */
+    }
+  }
+  return out;
+}
+
 /** Yield raw (not yet deduplicated) turns for every file, reading only bytes not seen before. */
 export async function readTurnsCached(
   files: string[],
@@ -115,8 +166,11 @@ export async function readTurnsCached(
     }
   }
   if (opts.useCache) {
+    // forget only files that lived under the roots this run scanned; other sources keep their entries
+    const norm = (x: string) => x.replace(/\\/g, "/");
+    const roots = [...new Set(files.map((f) => norm(f).split("/").slice(0, -2).join("/")))];
     for (const k of Object.keys(cache.files)) {
-      if (!seen.has(k)) {
+      if (!seen.has(k) && roots.some((r) => norm(k).startsWith(r + "/"))) {
         delete cache.files[k];
         dirty = true;
       }

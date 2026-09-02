@@ -40,7 +40,7 @@ export function renderScan(s: ScanResult, by: string, dir: string): string {
   out.push(c.bold(`billproof`) + c.dim(`  ${dir}`));
   out.push(c.dim(`${num(s.turns)} billed requests across ${num(s.sessions)} sessions, ${date(s.from)} to ${date(s.to)}; ${num(s.lines)} transcript lines read`));
   out.push("");
-  out.push(c.bold(`True cost at Anthropic list price: ${usd(s.total.total)}`));
+  out.push(c.bold(`True cost at list price: ${usd(s.total.total)}`));
   out.push(
     table(
       ["category", "tokens", "cost", "share"],

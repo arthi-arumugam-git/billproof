@@ -2,8 +2,9 @@
 import { receipt } from "./analyze/receipt.js";
 import { scan, type GroupBy } from "./analyze/scan.js";
 import { dedupe } from "./dedupe.js";
-import { readTurnsCached, type CachedReadStats } from "./cache.js";
-import { defaultTranscriptDir, findTranscripts } from "./discover.js";
+import { readTurnsCached, readWholeFilesCached, type CachedReadStats } from "./cache.js";
+import { findTranscripts } from "./discover.js";
+import { defaultDir, findSessionFiles, parseSource } from "./sources.js";
 import { renderReceiptHtml } from "./report/html.js";
 import { renderReceipt, renderScan, usd } from "./report/terminal.js";
 import { activate, checkLicense, licensePath } from "./license.js";
@@ -13,14 +14,15 @@ import { writeFile } from "node:fs/promises";
 const HELP = `billproof — prove your AI bill
 
 Usage
-  billproof [scan] [--dir <path>] [--since 7d|30d|YYYY-MM-DD] [--by day|model|project|skill|mcp|agent|session] [--json] [--no-cache]
+  billproof [scan] [--source all|claude|codex|gemini] [--dir <path>] [--since 7d|30d|YYYY-MM-DD]
+                   [--by day|model|project|skill|mcp|agent|session|provider|source] [--json] [--no-cache]
   billproof receipt <session-id|--last|--today> [--all] [--json] [--html <file>]
   billproof sessions [--since ...]            list sessions with cost, newest first
   billproof activate <license-key>            unlock receipt on this machine
   billproof license                           show license status
 
-Reads Claude Code transcripts from ~/.claude/projects (or CLAUDE_CONFIG_DIR). Nothing leaves your machine
-except a license check when you run activate.`;
+Reads Claude Code (~/.claude/projects), Codex (~/.codex/sessions) and Gemini CLI (~/.gemini/tmp) sessions.
+--dir overrides the directory for a single --source. Nothing leaves your machine except a license check.`;
 
 interface Args {
   cmd: string;
@@ -58,11 +60,27 @@ function sinceMs(v: string | boolean | undefined): number {
   return t;
 }
 
-async function loadTurns(dir: string, since: number, useCache: boolean): Promise<{ turns: Turn[]; stats: CachedReadStats }> {
-  const files = await findTranscripts(dir);
+async function loadTurns(
+  sources: ReturnType<typeof parseSource>,
+  dirOverride: string | undefined,
+  since: number,
+  useCache: boolean,
+): Promise<{ turns: Turn[]; stats: CachedReadStats; dirs: string[] }> {
   const stats: CachedReadStats = { files: 0, lines: 0, badLines: 0, cachedFiles: 0, bytesRead: 0 };
-  const raw = await readTurnsCached(files, stats, { useCache });
-  return { turns: dedupe(raw.filter((t) => t.ts >= since)), stats };
+  const raw: Turn[] = [];
+  const dirs: string[] = [];
+  for (const source of sources) {
+    const dir = dirOverride && sources.length === 1 ? dirOverride : defaultDir(source);
+    dirs.push(dir);
+    if (source === "claude-code") {
+      const files = await findTranscripts(dir);
+      for (const t of await readTurnsCached(files, stats, { useCache })) raw.push(t);
+    } else {
+      const files = await findSessionFiles(source, dir);
+      for (const t of await readWholeFilesCached(source, files, stats, { useCache })) raw.push(t);
+    }
+  }
+  return { turns: dedupe(raw.filter((t) => t.ts >= since)), stats, dirs };
 }
 
 async function main(): Promise<number> {
@@ -71,7 +89,12 @@ async function main(): Promise<number> {
     console.log(HELP);
     return 0;
   }
-  const dir = typeof flags.dir === "string" ? flags.dir : defaultTranscriptDir();
+  const sources = parseSource(typeof flags.source === "string" ? flags.source : undefined);
+  const dirOverride = typeof flags.dir === "string" ? flags.dir : undefined;
+  if (dirOverride && sources.length > 1) {
+    console.error("--dir needs a single --source (claude, codex or gemini) so it is clear which layout the directory has.");
+    return 2;
+  }
   const since = sinceMs(flags.since);
 
   if (cmd === "activate") {
@@ -90,9 +113,10 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  const { turns, stats } = await loadTurns(dir, since, !flags["no-cache"]);
+  const { turns, stats, dirs } = await loadTurns(sources, dirOverride, since, !flags["no-cache"]);
+  const dir = dirs.join(", ");
   if (turns.length === 0) {
-    console.error(`No billed requests found under ${dir}${since ? " in that window" : ""}. Is this the machine that runs Claude Code?`);
+    console.error(`No billed requests found under ${dir}${since ? " in that window" : ""}. Is this the machine that runs the agent?`);
     return 1;
   }
 
